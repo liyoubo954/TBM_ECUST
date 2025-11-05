@@ -1,0 +1,24 @@
+# IDE
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 环境
+.env
+.venv
+env/
+venv/
+
+# 模型文件
+app/models/saved/*.h5
+app/models/saved/*.pkl
+
+# 日志
+*.log
+
+# 数据文件
+data/
+*.csv
