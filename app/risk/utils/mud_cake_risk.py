@@ -1,613 +1,777 @@
-import numpy as np
 import pandas as pd
-import os
-import pickle
-import tensorflow as tf
+import numpy as np
+import json
+from pathlib import Path
+from typing import Dict, List, Any, Tuple
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
-from typing import Dict, Any, List, Set
-import json
 import joblib
-import logging
-
-# 配置logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
+import os
+# 抑制TensorFlow的INFO级别日志输出（需在导入TensorFlow前设置）
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
+import tensorflow as tf
+import random
 
 
 class AutoEncoder(tf.keras.Model):
-    """动态特征适配的LSTM自编码器（Keras）"""
-    def __init__(self, input_size, hidden_size, num_layers=2, dropout=0.2, original_input_size=None):
+    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 2, dropout: float = 0.3, l2: float = 0.0):
         super().__init__()
-        # 与训练脚本保持一致的属性
-        self.model_input_size = int(input_size)
-        self.original_input_size = int(original_input_size or input_size)
-
-        # 与训练脚本一致：编码器返回序列和状态，解码器返回序列
+        self.input_size = input_size
+        reg = tf.keras.regularizers.l2(l2) if l2 and l2 > 0.0 else None
         self.encoder = tf.keras.layers.LSTM(
             units=hidden_size,
             return_sequences=True,
             return_state=True,
             dropout=dropout if num_layers > 1 else 0.0,
+            kernel_regularizer=reg,
+            recurrent_regularizer=reg,
+            bias_regularizer=None,
         )
         self.decoder = tf.keras.layers.LSTM(
             units=hidden_size,
             return_sequences=True,
             dropout=dropout if num_layers > 1 else 0.0,
+            kernel_regularizer=reg,
+            recurrent_regularizer=reg,
+            bias_regularizer=None,
         )
-        # 保持输出层命名为 output_dense，便于权重映射
-        self.output_dense = tf.keras.layers.Dense(self.model_input_size)
+        self.output_dense = tf.keras.layers.Dense(input_size, kernel_regularizer=reg)
 
     def call(self, x, training=False):
-        # x shape: (batch, time, features)
-        input_dim = tf.shape(x)[-1]
-
-        # 与训练脚本一致的维度适配：按静态特征维度进行截断/填充
-        if x.shape[-1] != self.model_input_size:
-            if x.shape[-1] > self.model_input_size:
-                x = x[:, :, :self.model_input_size]
-            else:
-                pad_dim = self.model_input_size - x.shape[-1]
-                padding = tf.zeros((tf.shape(x)[0], tf.shape(x)[1], pad_dim), dtype=x.dtype)
-                x = tf.concat([x, padding], axis=-1)
-
-        # 编码：获取序列和最终隐状态
         encoded_seq, h, c = self.encoder(x, training=training)
-        # 解码：使用编码器隐状态作为初始状态
         decoded_seq = self.decoder(encoded_seq, initial_state=[h, c], training=training)
-        # 输出重构
         reconstructed = self.output_dense(decoded_seq)
-
-        # 输出维度适配到原始输入维度
-        if self.original_input_size != self.model_input_size:
-            if self.original_input_size > self.model_input_size:
-                pad_dim = self.original_input_size - self.model_input_size
-                padding = tf.zeros((tf.shape(reconstructed)[0], tf.shape(reconstructed)[1], pad_dim), dtype=reconstructed.dtype)
-                reconstructed = tf.concat([reconstructed, padding], axis=-1)
-            else:
-                reconstructed = reconstructed[:, :, :self.original_input_size]
-
         return reconstructed
+
+    def train_step(self, data):
+        # 接受 (x, y, mask) 三元组；若未提供 mask 则退化为普通 MSE
+        if isinstance(data, (tuple, list)):
+            if len(data) == 3:
+                x, y, mask = data
+            elif len(data) == 2:
+                x, y = data
+                mask = tf.ones_like(y)
+            else:
+                x = data
+                y = data
+                mask = tf.ones_like(y)
+        else:
+            x = data
+            y = data
+            mask = tf.ones_like(y)
+
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)
+            mask_f = tf.cast(mask, tf.float32)
+            sq_err = tf.square(y - y_pred) * mask_f
+            per_sample_sum = tf.reduce_sum(sq_err, axis=[1, 2])
+            per_sample_cnt = tf.reduce_sum(mask_f, axis=[1, 2])
+            per_sample_cnt = tf.maximum(per_sample_cnt, 1.0)
+            loss = tf.reduce_mean(per_sample_sum / per_sample_cnt)
+
+        grads = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
+        return {"loss": loss}
+
+    def test_step(self, data):
+        # 验证/评估阶段的掩码损失计算（不做反向传播）
+        if isinstance(data, (tuple, list)):
+            if len(data) == 3:
+                x, y, mask = data
+            elif len(data) == 2:
+                x, y = data
+                mask = tf.ones_like(y)
+            else:
+                x = data
+                y = data
+                mask = tf.ones_like(y)
+        else:
+            x = data
+            y = data
+            mask = tf.ones_like(y)
+
+        y_pred = self(x, training=False)
+        mask_f = tf.cast(mask, tf.float32)
+        sq_err = tf.square(y - y_pred) * mask_f
+        per_sample_sum = tf.reduce_sum(sq_err, axis=[1, 2])
+        per_sample_cnt = tf.reduce_sum(mask_f, axis=[1, 2])
+        per_sample_cnt = tf.maximum(per_sample_cnt, 1.0)
+        loss = tf.reduce_mean(per_sample_sum / per_sample_cnt)
+        return {"loss": loss}
+
+
+class UnsupervisedMudCakeDetector:
+    """
+    无监督结泥饼风险检测器
+    核心思想：学习正常工况的数据模式，偏离正常模式即为异常
+    """
+
+    def __init__(self, verbose: bool = True):
+        self.verbose = verbose
+        self.device = self._select_device()
+        self.autoencoder = None
+        self.isolation_forest = None
+        self.scalers = {}
+        self.robust_scalers = {}
+        self.training_data_df = None
+        self.model_dir = Path('app/risk/models')
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+
+        self.config = {
+            'sequence_length': 6,
+            'feature_selection': {
+                'min_valid_ratio': 0.05,
+                'min_variance': 1e-6,
+            },
+            'feature_weights': {
+                'TJSD': 1.5,
+                'DP_SS_ZTL': 1.5,
+                'TJL': 1.5,
+                'DP_SD': 0.7,
+                'DP_ZJ': 0.7,
+            },
+            'risk_fusion': {
+                'ae_weight': 0.35,
+                'if_weight': 0.65,
+            },
+            'data_processing': {
+                'sampling_ratio': 0.8,
+                'random_seed': 42,
+                'val_ratio': 0.2,
+                'rings_per_sequence': 6,
+                'window_points': 48,
+                'window_stride': 8,
+                'clip_zscore': 3.5,
+            },
+            'autoencoder_params': {
+                'hidden_size': 16,
+                'num_layers': 1,
+                'dropout': 0.2,
+                'learning_rate': 0.0005,
+                'batch_size': 32,
+                'epochs': 30,
+                'patience': 8,
+                'l2': 1e-5,
+            },
+            'isolation_forest_params': {
+                'contamination': 0.04,
+                'random_state': 42,
+                'n_estimators': 100,
+                'max_fit_samples': 50000,
+                'use_interactions': False
+            },
+        }
+
+    def _select_device(self):
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            try:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                return 'GPU'
+            except Exception as e:
+                return 'CPU'
+        else:
+            return 'CPU'
+
+
+    def _normalize_with_feature_mask(self, data: np.ndarray, feature_mask: np.ndarray, data_source: str) -> np.ndarray:
+        """基于MAD的鲁棒归一化；若鲁棒尺度缺失则回退到StandardScaler。"""
+        d = data.shape[1]
+        zmax = float(self.config.get('data_processing', {}).get('clip_zscore', 0) or 0)
+        # 优先使用鲁棒尺度（形如 self.robust_scalers['global_window'][i] = {'median': m, 'mad': s}）
+        if data_source in self.robust_scalers and isinstance(self.robust_scalers[data_source], list) and len(self.robust_scalers[data_source]) == d:
+            normalized = data.copy()
+            for i in range(d):
+                col_mask = feature_mask[:, i]
+                med = float(self.robust_scalers[data_source][i].get('median', 0.0))
+                mad = float(self.robust_scalers[data_source][i].get('mad', 1.0))
+                scale = mad if mad > 1e-8 else 1.0
+                col = data[:, i]
+                transformed = (col - med) / scale
+                if zmax > 0:
+                    transformed = np.clip(transformed, -zmax, zmax)
+                normalized[col_mask, i] = transformed[col_mask]
+                normalized[~col_mask, i] = 0.0
+            return normalized
+        # 回退到标准化器路径（兼容旧模型）
+        if data_source not in self.scalers or not isinstance(self.scalers[data_source], list) or len(self.scalers[data_source]) != d:
+            self.scalers[data_source] = [StandardScaler() for _ in range(d)]
+            for i in range(d):
+                col_mask = feature_mask[:, i]
+                values = data[col_mask, i]
+                if values.size > 0:
+                    self.scalers[data_source][i].fit(values.reshape(-1, 1))
+                else:
+                    self.scalers[data_source][i].fit(np.zeros((10, 1)))
+        normalized = data.copy()
+        for i in range(d):
+            col_mask = feature_mask[:, i]
+            if np.any(col_mask):
+                col = data[:, i:i + 1]
+                transformed = self.scalers[data_source][i].transform(col)[:, 0]
+                if zmax > 0:
+                    transformed = np.clip(transformed, -zmax, zmax)
+                normalized[col_mask, i] = transformed[col_mask]
+                normalized[~col_mask, i] = 0.0
+        return normalized
+    # 废弃：训练与推理不再使用基线/中心化，相关方法移除
+
+    
+
+    
+
+    def load_models(self) -> bool:
+        try:
+            model_info_path = self.model_dir / 'mud_cake_model_info.json'
+            if not model_info_path.exists():
+                return False
+            with open(model_info_path, 'r', encoding='utf-8') as f:
+                model_info = json.load(f)
+            self.config = model_info['config']
+            self.all_features = model_info['features']
+            self.feature_dim = model_info['feature_dim']
+            self.autoencoder = AutoEncoder(input_size=self.feature_dim, hidden_size=self.config['autoencoder_params']['hidden_size'], num_layers=self.config['autoencoder_params']['num_layers'], dropout=self.config['autoencoder_params']['dropout'])
+            dummy = tf.zeros((1, int(self.config['sequence_length']), int(self.feature_dim)))
+            _ = self.autoencoder(dummy, training=False)
+            self.autoencoder.load_weights(self.model_dir / 'mud_cake_autoencoder.h5')
+            self.isolation_forest = joblib.load(self.model_dir / 'mud_cake_isolation_forest.pkl')
+            try:
+                scalers_pack = joblib.load(self.model_dir / 'mud_cake_scalers.pkl')
+                if isinstance(scalers_pack, dict):
+                    self.robust_scalers = scalers_pack.get('robust', {})
+                    self.scalers = scalers_pack.get('standard', {})
+                else:
+                    # 兼容旧模型：仅标准化器
+                    self.scalers = scalers_pack
+            except Exception:
+                self.robust_scalers = {}
+                self.scalers = {}
+            return True
+        except Exception as e:
+            print(f"加载模型失败: {e}")
+            return False
 
 
 class MudCakeRiskCalculator:
+    """
+    兼容旧接口的风险计算器包装类。
+    说明：为了解决外部模块（如 routes.py）在导入时依赖该类而导致的 ImportError，
+    这里提供一个包装实现，内部复用 UnsupervisedMudCakeDetector 的模型与配置，
+    并实现环对序列评估接口，以便 evaluate.py 和路由在导入阶段不再报错。
+    """
 
-    # 风险阈值定义为类变量
-    RISK_THRESHOLDS = {
-        'no_risk': 0.0,  # 0-0.3: 无风险
-        'low': 0.3,  # 0.3-0.524: 低风险
-        'medium': 0.524,  # 0.524-0.9: 中风险
-        'high': 0.9  # 0.9-1.0: 高风险
-    }
-
-    def __init__(self, model_type='unified', model_dir=None):
+    def __init__(self, model_type: str = 'unified', model_dir: str = None):
         self.model_type = model_type
-        # TensorFlow 自动选择设备；记录设备信息供调试
-        self.device = '/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'
-        self.models_loaded = False
-
-        # 模型组件初始化为None
-        self.scaler = None
-        self.autoencoder = None
-        self.isolation_forest = None
-        self.reconstruction_threshold = float(os.environ.get("MUD_RECON_THRESHOLD", "0.18"))
-        self.isolation_threshold = float(os.environ.get("MUD_ISO_THRESHOLD", "-0.25"))
-        self.rec_weight = float(os.environ.get("MUD_REC_WEIGHT", "0.5"))
-        self.iso_weight = float(os.environ.get("MUD_ISO_WEIGHT", "0.5"))
-        # 环境可控的风险分档阈值（与训练分布对齐）
-        self.risk_thresholds = {
-            'no_risk': 0.0,
-            'low': float(os.environ.get("MUD_LOW_BOUND", str(self.RISK_THRESHOLDS['low']))),
-            'medium': float(os.environ.get("MUD_MEDIUM_BOUND", str(self.RISK_THRESHOLDS['medium']))),
-            'high': float(os.environ.get("MUD_HIGH_BOUND", str(self.RISK_THRESHOLDS['high'])))
-        }
-        # 是否忽略 RING/state 两列（默认不忽略，按训练使用）
-        self.ignore_ring_state = os.environ.get("MUD_IGNORE_RING_STATE", "false").lower() in ("1", "true", "yes")
-        self.available_features = []
-        # 允许特征（仅作为兜底；实际以train.py保存的all_features为准）
-        self.ALLOWED_FEATURES = ['TJSD', 'TJL', 'DP_SD', 'DP_ZJ', 'DP_SS_ZTL']
-        self.feature_dim = 0
-        self.model_info = {}
-
-        # 设置模型目录
-        if model_dir is None:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            self.model_dir = os.path.join(os.path.dirname(current_dir), 'models')
-        else:
-            self.model_dir = model_dir
-
-    def _safe_load_pickle(self, file_path):
-        """安全加载pickle文件，处理损坏的文件"""
+        self.detector = UnsupervisedMudCakeDetector()
+        if model_dir is not None:
+            self.detector.model_dir = Path(model_dir)
+        # 尝试加载模型；加载失败时仍允许实例化，调用方自行处理
         try:
-            with open(file_path, 'rb') as f:
-                return pickle.load(f)
-        except (pickle.UnpicklingError, EOFError, ValueError) as e:
-            try:
-                return joblib.load(file_path)
-            except Exception as e2:
-                raise
-
-    def _safe_tf_load(self, file_path, custom_objects=None):
-        """安全加载TensorFlow/Keras模型文件（SavedModel 或 HDF5）"""
-        try:
-            # 优先按 Keras SavedModel/H5 加载
-            model = tf.keras.models.load_model(file_path, compile=False, custom_objects=custom_objects or {})
-            return model
+            self.detector.load_models()
         except Exception:
-            # 尝试 SavedModel 目录加载为 Keras 模型
+            pass
+
+    def _minmax(self, a: np.ndarray) -> np.ndarray:
+        mn, mx = float(np.min(a)), float(np.max(a))
+        if mx - mn < 1e-8:
+            return np.zeros_like(a)
+        return (a - mn) / (mx - mn)
+
+    def _aggregate_values(self, values: List[float], mode: str, **kwargs) -> float:
+        try:
+            if not values:
+                return 0.0
+            arr = np.array(values, dtype=float)
+            if mode == 'max':
+                return float(np.max(arr))
+            if mode == 'mean':
+                return float(np.mean(arr))
+            if mode == 'median':
+                return float(np.median(arr))
+            if mode == 'pquantile':
+                q = float(kwargs.get('quantile_p', 0.95))
+                q = max(0.0, min(1.0, q))
+                return float(np.quantile(arr, q))
+            if mode == 'topk_mean':
+                k = int(kwargs.get('topk_k', 3) or 3)
+                k = max(1, min(k, arr.size))
+                topk = np.sort(arr)[-k:]
+                return float(np.mean(topk))
+            # 默认采用稳健的中位数，避免少数窗口尖峰导致误判
+            return float(np.median(arr))
+        except Exception:
+            # 任何异常回退为均值
             try:
-                model = tf.keras.models.load_model(file_path, compile=False, custom_objects=custom_objects or {})
-                return model
+                return float(np.mean(np.array(values, dtype=float)))
             except Exception:
-                # 回退到原始SavedModel（非Keras）
+                return 0.0
+
+    def calculate_ring_pair_risk_series(self, ring_features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        兼容旧接口：将每环的聚合特征映射为“环内滑窗展平”形态，与训练完全一致。
+        做法：把每环的特征值在窗口长度内重复，形成 len(all_features)*window_points 的向量，seq_len=1。
+        """
+        try:
+            if not isinstance(ring_features, list) or not ring_features:
+                return {'status': 'error', 'message': '输入环特征为空'}
+            window_points = int(self.detector.config['data_processing']['window_points'])
+            seq_len = int(self.detector.config['sequence_length'])
+            all_feats = list(self.detector.all_features)
+            # 构造单窗口序列（每环一个），并按环号排序
+            records = []
+            for item in ring_features:
+                ring_id = item.get('ring', item.get('RING', 0))
+                vec_vals = []
+                vec_mask = []
+                for f in all_feats:
+                    v = item.get(f, np.nan)
+                    if v is None or (isinstance(v, float) and np.isnan(v)):
+                        vec_vals.extend([0.0] * window_points)
+                        vec_mask.extend([False] * window_points)
+                    else:
+                        val = float(v)
+                        vec_vals.extend([val] * window_points)
+                        vec_mask.extend([True] * window_points)
+                records.append((ring_id, np.array(vec_vals, dtype=float), np.array(vec_mask, dtype=bool)))
+            # 排序
+            def _ring_key(x):
                 try:
-                    model = tf.saved_model.load(file_path)
-                    return model
+                    return int(x)
                 except Exception:
-                    raise
-
-    def _safe_tf_load_weights(self, model_instance, file_path):
-        """安全加载Keras权重（H5），用于子类模型"""
-        try:
-            model_instance.load_weights(file_path)
-            return model_instance
-        except Exception:
-            raise
-    def _load_models(self):
-        try:
-            model_info_path = os.path.join(self.model_dir, 'mud_cake_model_info.json')
-            if not os.path.exists(model_info_path):
-                raise FileNotFoundError(f"Mud cake model info file not found: {model_info_path}")
-            try:
-                with open(model_info_path, 'r', encoding='utf-8') as f:
-                    model_info = json.load(f)
-                self.model_info = model_info
-                training_features = model_info.get('training_features', {})
-                # 以训练保存的特征列表为标准，不再限制为5个允许特征
-                available = training_features.get('available_features', model_info.get('all_features', []))
-                self.available_features = available if available else model_info.get('all_features', [])
-                if not self.available_features:
-                    # 兜底使用允许特征
-                    self.available_features = list(self.ALLOWED_FEATURES)
-                self.feature_dim = len(self.available_features)
-                scaler_path = os.path.join(self.model_dir, 'mud_cake_scalers.pkl')
-                if not os.path.exists(scaler_path):
-                    raise FileNotFoundError(f"Mud cake scaler file not found: {scaler_path}")
-                scalers_dict = self._safe_load_pickle(scaler_path)
-                if isinstance(scalers_dict, dict):
-                    if 'Other_Projects' in scalers_dict:
-                        self.scaler = scalers_dict['Other_Projects']
-                    else:
-                        self.scaler = list(scalers_dict.values())[0]
-                else:
-                    self.scaler = scalers_dict
-                # 3. 加载结泥饼自编码器模型（TensorFlow/Keras）
-                autoencoder_path_h5 = os.path.join(self.model_dir, 'mud_cake_autoencoder.h5')
-                autoencoder_path_dir = os.path.join(self.model_dir, 'mud_cake_autoencoder')
-
-                # 从配置获取参数
-                autoencoder_params = model_info['config']['autoencoder_params']
-                original_input_size = autoencoder_params.get('input_size', len(self.ALLOWED_FEATURES))
-
-                # 优先加载权重（H5）到子类模型
-                if os.path.exists(autoencoder_path_h5):
                     try:
-                        # 优先尝试按“完整Keras模型”加载（H5保存的全模型）
-                        loaded = self._safe_tf_load(autoencoder_path_h5, custom_objects={'AutoEncoder': AutoEncoder})
-                        setattr(loaded, 'model_input_size', int(original_input_size))
-                        setattr(loaded, 'original_input_size', int(self.feature_dim))
-                        self.autoencoder = loaded
-                        logger.info("Loaded mud cake autoencoder (H5 full model) successfully")
-                    except Exception as e:
-                        logger.warning(f"Failed to load H5 full model; trying weights: {e}")
-                        try:
-                            ae = AutoEncoder(
-                                input_size=original_input_size,
-                                hidden_size=autoencoder_params['hidden_size'],
-                                num_layers=autoencoder_params['num_layers'],
-                                dropout=autoencoder_params['dropout'],
-                                original_input_size=self.feature_dim
-                            )
-                            # 显式构建模型图以初始化变量（使用已保存的序列长度）
-                            try:
-                                seq_len = int(self.model_info.get('config', {}).get('sequence_length', 25))
-                                dummy = tf.zeros((1, seq_len, int(self.feature_dim)), dtype=tf.float32)
-                                ae(dummy, training=False)
-                            except Exception as build_e:
-                                logger.warning(f"AutoEncoder build before weight load failed: {build_e}")
-                            self.autoencoder = self._safe_tf_load_weights(ae, autoencoder_path_h5)
-                            logger.info("Loaded mud cake autoencoder weights (H5) successfully")
-                        except Exception as e2:
-                            logger.warning(f"Failed to load H5 weights for autoencoder: {e2}")
-                            self.autoencoder = None
-                elif os.path.exists(autoencoder_path_dir):
-                    try:
-                        loaded = self._safe_tf_load(autoencoder_path_dir, custom_objects={'AutoEncoder': AutoEncoder})
-                        setattr(loaded, 'model_input_size', int(original_input_size))
-                        setattr(loaded, 'original_input_size', int(self.feature_dim))
-                        self.autoencoder = loaded
-                        logger.info("Loaded mud cake autoencoder (SavedModel) successfully")
-                    except Exception as e:
-                        logger.warning(f"Failed to load SavedModel autoencoder: {e}")
-                        self.autoencoder = None
+                        return int(float(x))
+                    except Exception:
+                        return x
+            records.sort(key=lambda r: _ring_key(r[0]))
+            if not records:
+                return {'status': 'success', 'per_ring': [], 'segments': []}
+            feature_matrix = np.vstack([r[1] for r in records])
+            feature_mask = np.vstack([r[2] for r in records])
+            normalized = self.detector._normalize_with_feature_mask(feature_matrix, feature_mask, 'global_window')
+            sequences = []
+            masks = []
+            window_to_ring = []
+            n = normalized.shape[0]
+            for i in range(0, max(0, n - seq_len + 1)):
+                sequences.append(normalized[i:i + seq_len])
+                masks.append(feature_mask[i:i + seq_len])
+                window_to_ring.append(records[i + seq_len - 1][0])
+            if not sequences:
+                return {'status': 'success', 'per_ring': [], 'segments': []}
+            X = np.array(sequences, dtype=np.float32)
+            M = np.array(masks, dtype=np.float32)
+            reconstructed = self.detector.autoencoder(X, training=False).numpy()
+            # 加权掩码：与训练一致按特征权重展开至窗口维度
+            fw_cfg = self.detector.config.get('feature_weights', {})
+            fw_map = {f: float(fw_cfg.get(f, 1.0)) for f in all_feats}
+            flat_w = np.concatenate([np.full(window_points, fw_map[f], dtype=np.float32) for f in all_feats])
+            err = np.mean(((X - reconstructed) ** 2) * (M * flat_w.reshape(1, 1, -1)), axis=(1, 2))
+            flattened = [(s * m).flatten() for s, m in zip(sequences, masks)]
+            scores = self.detector.isolation_forest.decision_function(flattened)
+            norm_err = self._minmax(err)
+            norm_if = self._minmax(-scores)
+            # 与训练/评估保持一致：融合权重从配置读取，默认 0.5/0.5
+            rf = self.detector.config.get('risk_fusion', {}) if hasattr(self.detector, 'config') else {}
+            ae_w = float(rf.get('ae_weight', 0.5))
+            if_w = float(rf.get('if_weight', 0.5))
+            # 归一到 1，防止调用方只设置其中一个权重
+            s = ae_w + if_w
+            if s <= 0:
+                ae_w, if_w = 0.5, 0.5
+                s = 1.0
+            ae_w /= s
+            if_w /= s
+            combined = ae_w * norm_err + if_w * norm_if
+            # 高风险段（threshold=0.9）
+            segments = []
+            in_seg = False
+            seg_start = 0
+            for i, v in enumerate(combined):
+                if v >= 0.9 and not in_seg:
+                    in_seg = True
+                    seg_start = i
+                elif v < 0.9 and in_seg:
+                    in_seg = False
+                    segments.append({'start_index': seg_start, 'end_index': i - 1})
+            if in_seg:
+                segments.append({'start_index': seg_start, 'end_index': len(combined) - 1})
+            # 每环综合风险：采用“全窗口稳健聚合”，避免少数窗口尖峰导致误判
+            ring_set = sorted(set(window_to_ring), key=_ring_key)
+            per_ring = []
+            agg_cfg = self.detector.config.get('aggregation', {}) if hasattr(self.detector, 'config') else {}
+            per_ring_mode = str(agg_cfg.get('per_ring_mode', 'median'))
+            topk_k = int(agg_cfg.get('topk_k', 3) or 3)
+            quantile_p = float(agg_cfg.get('quantile_p', 0.95) or 0.95)
+            for r in ring_set:
+                idxs = [i for i, rr in enumerate(window_to_ring) if rr == r]
+                if not idxs:
+                    continue
+                vals = [float(combined[i]) for i in idxs]
+                ring_risk = self._aggregate_values(vals, per_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
+                if ring_risk >= 0.9:
+                    level = 'high'
+                elif ring_risk >= 0.65:
+                    level = 'medium'
+                elif ring_risk >= 0.3:
+                    level = 'low'
                 else:
-                    # 构建一个形状对齐的占位模型（未加载权重时不用于计算，仍走风险兜底）
-                    try:
-                        self.autoencoder = AutoEncoder(
-                            input_size=original_input_size,
-                            hidden_size=autoencoder_params['hidden_size'],
-                            num_layers=autoencoder_params['num_layers'],
-                            dropout=autoencoder_params['dropout'],
-                            original_input_size=self.feature_dim
-                        )
-                        logger.info("Built fallback Keras autoencoder instance (no weights)")
-                    except Exception as e:
-                        logger.warning(f"Failed to build fallback AutoEncoder: {e}")
-                        self.autoencoder = None
-
-                # 4. 加载结泥饼孤立森林模型
-                isolation_path = os.path.join(self.model_dir, 'mud_cake_isolation_forest.pkl')
-                if not os.path.exists(isolation_path):
-                    raise FileNotFoundError(f"Mud cake isolation forest file not found: {isolation_path}")
-
-                self.isolation_forest = self._safe_load_pickle(isolation_path)
-                logger.info("Loaded mud cake isolation forest successfully")
-
-                # 5. 设置结泥饼风险阈值（使用 __init__ 中配置）
-                # 保持 __init__ 中通过环境变量设定的阈值，不在此处覆盖
-                # 严格校验：所有核心组件必须可用
-                if self.scaler is None or self.autoencoder is None or self.isolation_forest is None:
-                    raise RuntimeError("Mud cake models incomplete: autoencoder/scaler/isolation not available")
-
-                self.models_loaded = True
-                logger.info("All mud cake trained models loaded successfully")
-
-            except Exception as e:
-                logger.error(f"Error loading mud cake trained models: {str(e)}")
-                self.models_loaded = False
-                raise RuntimeError(f"Failed to load mud cake trained models: {str(e)}")
-
-        except Exception as e:
-            logger.error(f"Error loading mud cake trained models: {str(e)}")
-            self.models_loaded = False
-            raise RuntimeError(f"Failed to load mud cake trained models: {str(e)}")
-
-    def create_standard_features(self, data_point: Dict[str, Any], available_columns: Set[str] = None) -> Dict[
-        str, float]:
-        """按训练特征列表严格取值；缺失或无效置0"""
-        features = {}
-
-        # 训练特征顺序
-        feature_list = self.available_features if self.available_features else self.model_info.get('all_features', [])
-        prop = data_point.get('property', {}) if isinstance(data_point, dict) else {}
-
-        for feature in feature_list:
-            if feature == 'RING':
-                val = data_point.get('ring', 0)
-            elif feature == 'state':
-                val = data_point.get('state', 0)
-            else:
-                val = prop.get(feature, 0)
-            try:
-                features[feature] = float(val) if not pd.isna(val) else 0.0
-            except Exception:
-                features[feature] = 0.0
-
-        return features
-
-    def _validate_input(self, data_sequence):
-        """验证输入数据的有效性"""
-        if not data_sequence:
-            raise ValueError("数据序列不能为空")
-
-        if not isinstance(data_sequence, list):
-            raise ValueError("数据序列必须是列表格式")
-
-        for i, data in enumerate(data_sequence):
-            if not isinstance(data, dict):
-                raise ValueError(f"数据点 {i} 必须是字典格式")
-
-            if 'property' not in data:
-                raise ValueError(f"数据点 {i} 缺少 'property' 字段")
-
-    def _extract_features(self, data_sequence) -> np.ndarray:
-        """按训练特征列表构造序列特征矩阵"""
-        features = []
-        feature_list = self.available_features if self.available_features else self.model_info.get('all_features', [])
-        for data in data_sequence:
-            feature_dict = self.create_standard_features(data)
-            feature_row = []
-            for f in feature_list:
-                # 支持开关忽略 RING/state，否则按训练使用真实值
-                if f in ('RING', 'state') and getattr(self, 'ignore_ring_state', False):
-                    feature_row.append(0.0)
-                else:
-                    feature_row.append(feature_dict.get(f, 0.0))
-            features.append(feature_row)
-        return np.array(features)
-
-    def _calculate_reconstruction_risk(self, features):
-        """计算自编码器重构风险，支持任意特征数量的动态适配"""
-        if not self.models_loaded or self.autoencoder is None:
-            raise RuntimeError("模型未加载或自编码器不可用")
-
-        try:
-            # [batch, time, dim]
-            features_tensor = tf.convert_to_tensor(features, dtype=tf.float32)
-            features_tensor = tf.expand_dims(features_tensor, axis=0)
-
-            # 获取当前特征维度和模型期望维度
-            current_dim = int(features_tensor.shape[-1])
-            model_input_size = int(getattr(self.autoencoder, 'model_input_size', current_dim))
-            original_input_size = int(getattr(self.autoencoder, 'original_input_size', current_dim))
-
-            logger.info(f"重构风险计算 - 当前特征维度: {current_dim}, 模型输入维度: {model_input_size}, 原始输入维度: {original_input_size}")
-
-            # 动态调整输入特征维度
-            if current_dim != model_input_size:
-                if current_dim < model_input_size:
-                    pad_dim = model_input_size - current_dim
-                    padding = tf.zeros([1, tf.shape(features_tensor)[1], pad_dim], dtype=features_tensor.dtype)
-                    features_tensor_adj = tf.concat([features_tensor, padding], axis=2)
-                    reconstructed = self.autoencoder(features_tensor_adj, training=False)
-                    reconstructed = reconstructed[:, :, :current_dim]
-                else:
-                    features_tensor_adj = features_tensor[:, :, :model_input_size]
-                    reconstructed = self.autoencoder(features_tensor_adj, training=False)
-                    if int(reconstructed.shape[-1]) > current_dim:
-                        reconstructed = reconstructed[:, :, :current_dim]
-            else:
-                reconstructed = self.autoencoder(features_tensor, training=False)
-
-            # 比较相同维度
-            min_dim = min(int(features_tensor.shape[-1]), int(reconstructed.shape[-1]))
-            features_tensor_compare = features_tensor[:, :, :min_dim]
-            reconstructed_compare = reconstructed[:, :, :min_dim]
-
-            # 计算重构误差（MSE）
-            errors = tf.reduce_mean(tf.square(reconstructed_compare - features_tensor_compare), axis=[1, 2])
-            avg_error = float(tf.reduce_mean(errors).numpy())
-            # 使用序列内的鲁棒阈值（median + 3*MAD）进行数据驱动概率映射
-            per_step_errors = tf.reduce_mean(tf.square(reconstructed_compare - features_tensor_compare), axis=2)
-            errors_np = per_step_errors.numpy().reshape(-1)
-            baseline = float(np.median(errors_np)) if errors_np.size > 0 else avg_error
-            mad = float(np.median(np.abs(errors_np - baseline))) if errors_np.size > 0 else 0.0
-            dynamic_threshold = baseline + 3.0 * mad
-            if dynamic_threshold <= 1e-8:
-                dynamic_threshold = max(self.reconstruction_threshold, 1e-3)
-            risk_prob = float(np.mean(errors_np > dynamic_threshold)) if errors_np.size > 0 else min(1.0, avg_error / max(self.reconstruction_threshold, 1e-3))
-            return risk_prob, avg_error
-        except Exception as e:
-            logger.error(f"重构风险计算错误: {str(e)}")
-            raise
-
-    def _calculate_isolation_risk(self, features):
-        """计算孤立森林异常风险（序列展平 T*D）"""
-        if not self.models_loaded or self.isolation_forest is None:
-            raise RuntimeError("模型未加载或孤立森林不可用")
-
-        try:
-            flat = features.reshape(1, -1)
-            if hasattr(self.isolation_forest, 'n_features_in_'):
-                expected = self.isolation_forest.n_features_in_
-            elif hasattr(self.isolation_forest, 'n_features_'):
-                expected = self.isolation_forest.n_features_
-            else:
-                seq_len = int(self.model_info.get('config', {}).get('sequence_length', features.shape[0]))
-                expected = seq_len * features.shape[1]
-
-            actual = flat.shape[1]
-            if actual != expected:
-                if actual < expected:
-                    padding = np.zeros((1, expected - actual))
-                    flat = np.hstack([flat, padding])
-                else:
-                    flat = flat[:, :expected]
-
-            try:
-                score = self.isolation_forest.decision_function(flat)
-                avg = float(np.mean(score))
-            except Exception:
-                score = self.isolation_forest.score_samples(flat)
-                avg = float(np.mean(score))
-
-            # 使用Logistic映射将孤立森林分数转换为概率（正值更正常，负值更异常）
-            iso_scale = float(os.environ.get("MUD_ISO_SCALE", "5.0"))
-            risk_prob = float(1.0 / (1.0 + np.exp(iso_scale * avg)))
-            risk_prob = max(0.0, min(1.0, risk_prob))
-            return risk_prob, avg
-        except Exception as e:
-            logger.error(f"孤立森林风险计算错误: {str(e)}")
-            raise
-
-    def calculate_risk(self, data_sequence: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """计算结泥饼风险，支持动态特征适配和缺失字段处理"""
-        try:
-            self._validate_input(data_sequence)
-
-            if not self.models_loaded:
-                logger.info("Loading unified model with missing flag method")
-                self._load_models()
-
-            # 提取特征并记录可用字段
-            features = self._extract_features(data_sequence)
-            logger.debug(f"提取到特征矩阵: 形状={features.shape}")
-            
-            # 对齐训练序列长度
-            seq_len = int(self.model_info.get('config', {}).get('sequence_length', features.shape[0]))
-            if features.shape[0] != seq_len:
-                cur = features.shape[0]
-                if cur > seq_len:
-                    features = features[-seq_len:]
-                else:
-                    missing = seq_len - cur
-                    if cur == 0:
-                        pad = np.zeros((missing, features.shape[1]))
-                        features = np.vstack([features, pad]) if features.size else pad
-                    else:
-                        fill_method = getattr(self, 'seq_fill_method', 'repeat_window')
-                        if fill_method == 'repeat_last':
-                            pad = np.tile(features[-1], (missing, 1))
-                            features = np.vstack([features, pad])
-                        elif fill_method == 'zero_pad':
-                            pad = np.zeros((missing, features.shape[1]))
-                            features = np.vstack([features, pad])
-                        else:  # repeat_window
-                            reps = int(np.ceil(missing / cur))
-                            tiled = np.tile(features, (reps, 1))[:missing]
-                            features = np.vstack([features, tiled])
-                    logger.info(f"对齐序列长度: {cur} -> {seq_len}, 填充方式: {getattr(self, 'seq_fill_method', 'repeat_window')}")
-            
-            # 标准化：优先整矩阵变换，确保特征顺序与训练一致
-            if self.scaler is not None:
+                    level = 'no_risk'
+                # 尽量返回整数环号
                 try:
-                    original_features = features.copy()
-                    # 如果scaler是针对多特征训练的（常见情形），直接对整矩阵进行变换
-                    if hasattr(self.scaler, 'transform'):
-                        # 判断维度是否匹配（n_features 或 mean_ 长度）
-                        n_in = getattr(self.scaler, 'n_features_in_', None)
-                        mean_len = len(getattr(self.scaler, 'mean_', [])) if hasattr(self.scaler, 'mean_') else None
-                        if n_in == features.shape[1] or mean_len == features.shape[1] or (n_in is None and mean_len is None):
-                            features = self.scaler.transform(features)
+                    ring_int = int(r)
+                except Exception:
+                    try:
+                        ring_int = int(float(r))
+                    except Exception:
+                        ring_int = r
+                per_ring.append({'ring': ring_int, 'combined_risk': ring_risk, 'risk_level': level})
+            return {'status': 'success', 'per_ring': per_ring, 'segments': segments}
+        except Exception as e:
+            return {'status': 'error', 'message': f'环对评估失败: {str(e)}'}
+
+    def calculate_ring_risk_sequence(self, sequence_points: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        使用连续多环的原始点数据构建滑动窗口与跨窗序列，评估各环风险；
+        返回最后一环的综合风险及风险等级，并提供段落与最早触发信息。
+        """
+        try:
+            if not isinstance(sequence_points, list) or not sequence_points:
+                return {'status': 'error', 'message': '输入序列为空'}
+
+            # 提取特征与元信息
+            all_feats = list(self.detector.all_features)
+            sort_candidates = ['ts(Asia/Shanghai)', 'timestamp', 'time', 'TIME', 'Timestamp', 'time_stamp', '采样时间', 'DATETIME', 'Date', 'date', '时间', 'POINT_NO', 'ts']
+            seq_len = int(self.detector.config['sequence_length'])
+            window_points = int(self.detector.config['data_processing']['window_points'])
+            window_stride = int(self.detector.config['data_processing']['window_stride'])
+            rings_per_seq = int(self.detector.config['data_processing']['rings_per_sequence'])
+
+            # 转为 DataFrame
+            rows = []
+            for p in sequence_points:
+                prop = p.get('property', {}) if isinstance(p, dict) else {}
+                ring = p.get('ring', p.get('RING', 0))
+                ts = p.get('timestamp', p.get('ts(Asia/Shanghai)', p.get('time', None)))
+                row = {'RING': ring, 'timestamp': ts, 'data_source': 'unknown'}
+                for f in all_feats:
+                    v = prop.get(f, p.get(f, None))
+                    try:
+                        row[f] = float(v) if v is not None and not pd.isna(v) else np.nan
+                    except Exception:
+                        row[f] = np.nan
+                rows.append(row)
+            df = pd.DataFrame(rows)
+
+            # 按环号排序与分组
+            def _ring_key(x):
+                try:
+                    return int(x)
+                except Exception:
+                    try:
+                        return int(float(x))
+                    except Exception:
+                        return x
+            rings = sorted([r for r in df['RING'].dropna().unique()], key=_ring_key)
+            if len(rings) < rings_per_seq:
+                return {'status': 'error', 'message': '可用环数量不足以构建序列'}
+
+            sequences = []
+            masks = []
+            window_to_ring = []
+            window_to_time = []  # 每个窗口对应的结束时间戳
+            window_ring_list = []
+            ring_first_time = {}
+
+            for s in range(0, len(rings) - rings_per_seq + 1):
+                group = rings[s:s + rings_per_seq]
+                group_rows = []
+                group_masks = []
+                # 记录每个窗口的所属环号
+                for r in group:
+                    ring_df = df[df['RING'] == r].copy()
+                    sort_col = next((c for c in sort_candidates if c in ring_df.columns), None)
+                    if sort_col is not None:
+                        if sort_col != 'POINT_NO':
+                            try:
+                                ring_df[sort_col] = pd.to_datetime(ring_df[sort_col], errors='coerce')
+                            except Exception:
+                                pass
+                        ring_df = ring_df.sort_values(by=sort_col)
+                    ring_df = ring_df.reset_index(drop=True)
+                    if r not in ring_first_time and len(ring_df) > 0:
+                        ring_first_time[r] = ring_df.iloc[0].get('timestamp', '-')
+                    n = len(ring_df)
+                    if n < window_points:
+                        continue
+                    num_features = len(all_feats)
+                    F = np.zeros((n, num_features), dtype=float)
+                    FM = np.zeros((n, num_features), dtype=bool)
+                    for j, feature in enumerate(all_feats):
+                        vals = pd.to_numeric(ring_df[feature], errors='coerce').to_numpy()
+                        mask = ~np.isnan(vals)
+                        if not np.all(mask):
+                            for i in range(n):
+                                if mask[i]:
+                                    F[i, j] = vals[i]
+                                    FM[i, j] = True
+                                else:
+                                    F[i, j] = F[i - 1, j] if i > 0 else 0.0
+                                    FM[i, j] = False
                         else:
-                            # 尝试列级标注的scaler映射（dict[str->StandardScaler]）
-                            normalized = np.zeros_like(features)
-                            feature_list = self.available_features if self.available_features else self.model_info.get('all_features', [])
-                            for j, fname in enumerate(feature_list):
-                                col = features[:, j:j+1]
-                                scaler_j = None
-                                if isinstance(self.scaler, dict):
-                                    scaler_j = self.scaler.get(fname) or self.scaler.get(str(j))
-                                if scaler_j is None:
-                                    normalized[:, j] = col[:, 0]
-                                    continue
-                                try:
-                                    normalized[:, j:j+1] = scaler_j.transform(col)
-                                except Exception:
-                                    normalized[:, j] = col[:, 0]
-                            features = normalized
+                            F[:, j] = vals
+                            FM[:, j] = True
+                    sw = int(self.detector.config.get('data_processing', {}).get('smoothing_window', 0) or 0)
+                    if sw and sw > 1:
+                        for jj in range(num_features):
+                            series = pd.Series(F[:, jj])
+                            F[:, jj] = series.rolling(window=sw, center=True, min_periods=1).median().to_numpy()
+                    for start in range(0, n - window_points + 1, window_stride):
+                        end = start + window_points
+                        window_vals = []
+                        window_mask = []
+                        for j in range(num_features):
+                            seg = F[start:end, j]
+                            seg_m = FM[start:end, j]
+                            window_vals.extend(seg.tolist())
+                            window_mask.extend(seg_m.tolist())
+                        group_rows.append(np.array(window_vals, dtype=float))
+                        group_masks.append(np.array(window_mask, dtype=bool))
+                        window_ring_list.append(r)
+                        # 记录窗口结束点的时间戳（更贴近预警时刻）
+                        try:
+                            ts_val = ring_df.iloc[end - 1].get('timestamp', '-')
+                        except Exception:
+                            ts_val = '-'
+                        window_to_time.append(ts_val)
+                if not group_rows:
+                    continue
+                feature_matrix = np.vstack(group_rows)
+                feature_mask = np.vstack(group_masks)
+                normalized = self.detector._normalize_with_feature_mask(feature_matrix, feature_mask, 'global_window')
+                n_rows = normalized.shape[0]
+                if n_rows - seq_len + 1 > 0:
+                    for i in range(0, n_rows - seq_len + 1):
+                        sequences.append(normalized[i:i + seq_len])
+                        masks.append(feature_mask[i:i + seq_len])
+                        window_to_ring.append(window_ring_list[i + seq_len - 1])
+
+            if not sequences:
+                return {'status': 'error', 'message': '无法构建有效序列'}
+
+            X = np.array(sequences, dtype=np.float32)
+            M = np.array(masks, dtype=np.float32)
+            reconstructed = self.detector.autoencoder(X, training=False).numpy()
+
+            # 加权掩码误差
+            fw_cfg = self.detector.config.get('feature_weights', {})
+            fw_map = {f: float(fw_cfg.get(f, 1.0)) for f in all_feats}
+            flat_w = np.concatenate([np.full(window_points, fw_map[f], dtype=np.float32) for f in all_feats])
+            err = np.mean(((X - reconstructed) ** 2) * (M * flat_w.reshape(1, 1, -1)), axis=(1, 2))
+
+            # 趋势与交互特征
+            num_features_local = len(all_feats)
+            feat_weights = np.array([float(fw_cfg.get(f, 1.0)) for f in all_feats], dtype=np.float32)
+            use_inter = bool(self.detector.config.get('isolation_forest_params', {}).get('use_interactions', True))
+
+            def _trend_for_row(row: np.ndarray, mask_row: np.ndarray) -> np.ndarray:
+                feats = []
+                slopes = {}
+                deltas = {}
+                for j in range(num_features_local):
+                    base = j * window_points
+                    seg = row[base:base + window_points]
+                    seg_m = mask_row[base:base + window_points]
+                    idx = np.where(seg_m)[0]
+                    w = float(feat_weights[j])
+                    if idx.size >= 3:
+                        x = idx.astype(float)
+                        y = seg[idx].astype(float)
+                        p1 = np.polyfit(x, y, deg=1)
+                        p2 = np.polyfit(x, y, deg=2)
+                        slope = float(p1[0]) * w
+                        delta = float(y[-1] - y[0]) * w
+                        curvature = float(p2[0]) * w
+                        std = float(np.std(y)) * w
                     else:
-                        # 无 transform 能力，保留原始数值
-                        original_features = features.copy()
-                except Exception as e:
-                    logger.error(f"标准化特征时出错: {e}")
-                    logger.warning("标准化失败，使用原始特征继续计算")
-                    original_features = features.copy()
-            else:
-                # 没有标准化器，保存原始特征
-                original_features = features.copy()
+                        slope = 0.0; delta = 0.0; curvature = 0.0; std = 0.0
+                    slopes[all_feats[j]] = slope
+                    deltas[all_feats[j]] = delta
+                    feats.extend([slope, delta, curvature, std])
+                if use_inter:
+                    for a in range(num_features_local):
+                        wa = float(feat_weights[a])
+                        fa = all_feats[a]
+                        for b in range(a + 1, num_features_local):
+                            wb = float(feat_weights[b])
+                            fb = all_feats[b]
+                            w_pair = wa * wb
+                            sa = float(slopes.get(fa, 0.0))
+                            sb = float(slopes.get(fb, 0.0))
+                            da = float(deltas.get(fa, 0.0))
+                            db = float(deltas.get(fb, 0.0))
+                            feats.extend([
+                                w_pair * (sa * sb),
+                                w_pair * (da * db),
+                            ])
+                return np.array(feats, dtype=float)
 
-            # 计算重构风险和孤立森林风险
-            rec_risk, rec_error = self._calculate_reconstruction_risk(features)
-            iso_risk, iso_score = self._calculate_isolation_risk(features)
-            # 使用类属性权重（支持环境变量覆盖）
-            rec_weight = self.rec_weight
-            iso_weight = self.iso_weight
-            
-            combined_risk = rec_weight * rec_risk + iso_weight * iso_risk
-            combined_risk = min(combined_risk, 1.0)
+            trend_vectors = []
+            for s, m in zip(sequences, masks):
+                seq_trends = [_trend_for_row(s[i], m[i]) for i in range(s.shape[0])]
+                trend_vectors.append(np.vstack(seq_trends).flatten())
+            scores = self.detector.isolation_forest.decision_function(trend_vectors)
 
-            # 使用实例级阈值（支持环境变量）
-            if combined_risk >= self.risk_thresholds['high']:
-                risk_level = '高风险'
-            elif combined_risk >= self.risk_thresholds['medium']:
-                risk_level = '中风险'
-            elif combined_risk >= self.risk_thresholds['low']:
-                risk_level = '低风险'
-            else:
-                risk_level = '无风险'
+            # 融合
+            def _minmax(a: np.ndarray) -> np.ndarray:
+                mn, mx = float(np.min(a)), float(np.max(a))
+                if mx - mn < 1e-8:
+                    return np.zeros_like(a)
+                return (a - mn) / (mx - mn)
+            norm_err = _minmax(err)
+            norm_if = _minmax(-scores)
+            rf = self.detector.config.get('risk_fusion', {})
+            ae_w = float(rf.get('ae_weight', 0.5))
+            if_w = float(rf.get('if_weight', 0.5))
+            ssum = ae_w + if_w
+            if ssum <= 0:
+                ae_w, if_w = 0.5, 0.5
+                ssum = 1.0
+            ae_w /= ssum
+            if_w /= ssum
+            combined = ae_w * norm_err + if_w * norm_if
+            # 趋势门控逻辑已删除：直接使用融合分作为风险值
 
-            # 统计特征列有效性（避免未定义变量导致异常）
-            try:
-                total_cols = int(features.shape[1])
-                non_zero_cols = int(np.sum(np.any(features != 0, axis=0)))
-            except Exception:
-                total_cols = int(self.feature_dim) if hasattr(self, 'feature_dim') else features.shape[1]
-                non_zero_cols = total_cols
+            # 段落（高风险≥0.9）与最早触发（中风险≥0.65）
+            segments = []
+            in_seg = False
+            seg_start = 0
+            earliest_index = None
+            for i, v in enumerate(combined):
+                if earliest_index is None and v >= 0.65:
+                    earliest_index = i
+                if v >= 0.9 and not in_seg:
+                    in_seg = True
+                    seg_start = i
+                elif v < 0.9 and in_seg:
+                    in_seg = False
+                    segments.append({'start_index': seg_start, 'end_index': i - 1})
+            if in_seg:
+                segments.append({'start_index': seg_start, 'end_index': len(combined) - 1})
+
+            # 每环综合风险（取该环所有窗口风险的稳健聚合）
+            def _rk(x):
+                try:
+                    return int(x)
+                except Exception:
+                    try:
+                        return int(float(x))
+                    except Exception:
+                        return x
+            ring_set = sorted(set(window_to_ring), key=_rk)
+            per_ring = []
+            agg_cfg = self.detector.config.get('aggregation', {}) if hasattr(self.detector, 'config') else {}
+            per_ring_mode = str(agg_cfg.get('per_ring_mode', 'median'))
+            final_ring_mode = str(agg_cfg.get('final_ring_mode', per_ring_mode))
+            topk_k = int(agg_cfg.get('topk_k', 3) or 3)
+            quantile_p = float(agg_cfg.get('quantile_p', 0.95) or 0.95)
+            for r in ring_set:
+                idxs = [i for i, rr in enumerate(window_to_ring) if rr == r]
+                if not idxs:
+                    continue
+                vals = [float(combined[i]) for i in idxs]
+                ring_risk = self._aggregate_values(vals, per_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
+                if ring_risk >= 0.9:
+                    level = 'high'
+                elif ring_risk >= 0.65:
+                    level = 'medium'
+                elif ring_risk >= 0.3:
+                    level = 'low'
+                else:
+                    level = 'no_risk'
+                try:
+                    ring_int = int(r)
+                except Exception:
+                    try:
+                        ring_int = int(float(r))
+                    except Exception:
+                        ring_int = r
+                per_ring.append({'ring': ring_int, 'combined_risk': ring_risk, 'risk_level': level})
+
+            # 最后一环结果：取“最后一环所有窗口”的稳健聚合（默认中位数），体现序列整体对末环的影响
+            last_ring = ring_set[-1] if ring_set else None
+            final_risk = 0.0
+            final_level = 'no_risk'
+            if last_ring is not None:
+                # 仅在确有以最后一环为结束环的窗口时计算；否则视为序列与环映射异常
+                last_indices = [i for i, rr in enumerate(window_to_ring) if (int(rr) if isinstance(rr, (int, float, str)) else rr) == (int(last_ring) if isinstance(last_ring, (int, float, str)) else last_ring)]
+                if not last_indices:
+                    raise RuntimeError("无法定位最后一环的窗口，序列与环映射异常")
+                final_vals = [float(combined[i]) for i in last_indices]
+                final_risk = self._aggregate_values(final_vals, final_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
+                if final_risk >= 0.9:
+                    final_level = 'high'
+                elif final_risk >= 0.65:
+                    final_level = 'medium'
+                elif final_risk >= 0.3:
+                    final_level = 'low'
+                else:
+                    final_level = 'no_risk'
+            earliest_time = '-'
+            earliest_ring = (int(last_ring) if last_ring is not None else None)
+            if last_ring is not None:
+                # 仅考虑最后一环的窗口；若转换异常则抛错，由上层捕获为评估失败
+                for i, (ring_i, val_i) in enumerate(zip(window_to_ring, combined)):
+                    if (int(ring_i) if isinstance(ring_i, (int, float, str)) else ring_i) == int(last_ring) and val_i >= 0.65:
+                        tt = window_to_time[i] if i < len(window_to_time) else '-'
+                        earliest_time = tt if tt else '-'
+                        break
+
             return {
                 'status': 'success',
-                'combined_risk': combined_risk,
-                'risk_level': risk_level,
-                'components': {
-                    'reconstruction': {
-                        'risk': round(rec_risk, 4),
-                        'error': round(rec_error, 6),
-                        'threshold': self.reconstruction_threshold
-                    },
-                    'isolation': {
-                        'risk': round(iso_risk, 4),
-                        'score': round(iso_score, 6),
-                        'threshold': self.isolation_threshold
-                    }
-                },
-                'feature_info': {
-                    'total_features': total_cols,
-                    'effective_features': non_zero_cols,
-                    'effective_ratio': round(non_zero_cols/total_cols, 2)
-                },
-                'data_points': len(data_sequence),
-                'model_type': f"{self.model_type}_unified_missing_flag"
+                'combined_risk': final_risk,
+                'risk_level': final_level,
+                'segments': segments,
+                'earliest_time': earliest_time,
+                'earliest_ring': (int(last_ring) if last_ring is not None else None),
+                'per_ring': per_ring,
             }
-
-        except ValueError as ve:
-            logger.error(f"Input validation error: {str(ve)}")
-            raise
         except Exception as e:
-            # 降低该异常的日志等级，避免控制台噪声输出
-            logger.debug(f"Calculation error: {str(e)}")
-            raise
-def calculate_mud_cake_risk(data_point, shield_id='unified', calculator=None):
-    """计算结泥饼风险的接口函数 - 支持使用预加载的计算器"""
+            return {'status': 'error', 'message': f'序列评估失败: {str(e)}'}
+
+
+def calculate_mud_cake_risk(data: Dict[str, Any], calculator: MudCakeRiskCalculator = None) -> Dict[str, Any]:
+    """
+    单点评估（兼容旧接口）。
+    仅使用训练好的模型进行评估；模型不可用或评估失败时直接报错，不启用备用模式。
+    """
     try:
-        if calculator is None:
-            calculator = MudCakeRiskCalculator(model_type=shield_id)
-        # 按训练特征列表构造属性字典（缺失置0）
-        feature_list = calculator.available_features if calculator.available_features else calculator.model_info.get('all_features', [])
-        property_dict = {}
-        for field in feature_list:
-            if field in ('RING', 'state'):
-                continue
+        # 严格依赖模型：模型不可用则直接报错
+        if not (calculator and hasattr(calculator, 'detector') and calculator.detector is not None and 
+                calculator.detector.autoencoder is not None and calculator.detector.isolation_forest is not None):
+            raise RuntimeError("结泥饼模型未加载或不可用，不启用备用模式")
+
+        # 使用“环对序列评估”接口：将单点映射为一环的聚合特征，按窗口长度重复，保持与训练一致
+        all_feats = list(getattr(calculator.detector, 'all_features', []))
+        if not all_feats:
+            raise RuntimeError("模型特征集合不可用，无法执行评估")
+        ring_id = data.get('RING', data.get('ring', 0))
+        item = {'ring': ring_id}
+        for f in all_feats:
+            v = data.get(f, 0.0)
             try:
-                value = data_point.get(field, 0)
-                property_dict[field] = float(value) if value is not None and value != '' and not pd.isna(value) else 0.0
+                item[f] = float(v) if v is not None and not pd.isna(v) else 0.0
             except Exception:
-                property_dict[field] = 0.0
-
-        formatted_data_point = {
-            'property': property_dict,
-            'state': data_point.get('state', 'excavating'),
-            'timestamp': data_point.get('ts(Asia/Shanghai)', ''),
-            'ring': data_point.get('RING', 0)
-        }
-
-        # 使用训练配置的序列长度
-        seq_len = int(calculator.model_info.get('config', {}).get('sequence_length', 25))
-        data_sequence = [formatted_data_point] * seq_len
-        result = calculator.calculate_risk(data_sequence)
-
-        if result['status'] == 'success':
-            return {
-                'probability': round(result['combined_risk'], 2),
-                'risk_level': result['risk_level'],
-                'details': f"综合风险: {result['combined_risk']}"
-            }
-        else:
-            raise RuntimeError(result.get('message', '模型评估失败'))
-
+                item[f] = 0.0
+        pair_res = calculator.calculate_ring_pair_risk_series([item])
+        if not (isinstance(pair_res, dict) and pair_res.get('status') == 'success'):
+            msg = pair_res.get('message', '模型评估失败') if isinstance(pair_res, dict) else '模型评估失败'
+            raise RuntimeError(f"结泥饼模型评估失败: {msg}")
+        per_ring = pair_res.get('per_ring', []) or []
+        if not per_ring:
+            raise RuntimeError("模型评估未返回有效环级结果")
+        ring_risk = float(per_ring[0].get('combined_risk', 0.0))
+        level = per_ring[0].get('risk_level', 'no_risk')
+        return {'status': 'success', 'probability': ring_risk, 'risk_level': level}
     except Exception as e:
         raise
-
-
-def get_risk_level_by_probability(probability):
-    """根据概率值确定风险级别（支持环境阈值）"""
-    low = float(os.environ.get("MUD_LOW_BOUND", str(MudCakeRiskCalculator.RISK_THRESHOLDS['low'])))
-    medium = float(os.environ.get("MUD_MEDIUM_BOUND", str(MudCakeRiskCalculator.RISK_THRESHOLDS['medium'])))
-    high = float(os.environ.get("MUD_HIGH_BOUND", str(MudCakeRiskCalculator.RISK_THRESHOLDS['high'])))
-    if probability >= high:
-        return '高风险'
-    elif probability >= medium:
-        return '中风险'
-    elif probability >= low:
-        return '低风险'
-    else:
-        return '无风险'
