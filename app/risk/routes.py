@@ -698,7 +698,7 @@ def query_ring_data(ring_number):
         return None
 
 
-def collect_key_parameters(center_ring, fields, count=6):
+def collect_key_parameters(center_ring, fields, count=6, preload=None):
     fields_list = list(fields or [])
 
     try:
@@ -713,7 +713,10 @@ def collect_key_parameters(center_ring, fields, count=6):
 
     merged_points = []
     for r in range(start_ring, center + 1):
-        pts = query_ring_data(r) or []
+        if isinstance(preload, dict):
+            pts = preload.get(r) or []
+        else:
+            pts = query_ring_data(r) or []
         for p in pts:
             try:
                 local_dt = _to_local_dt(p.get("time"))
@@ -736,7 +739,6 @@ def collect_key_parameters(center_ring, fields, count=6):
 @bp.route('/getRiskLevel', methods=['POST'])
 def get_risk_level():
     try:
-        # 获取请求参数
         data = request.get_json()
         if not data:
             return jsonify({
@@ -751,9 +753,7 @@ def get_risk_level():
                 "message": "未提供环号参数"
             }), 400
 
-        # 确保ring_number可以被处理，无论是整数还是字符串
         try:
-            # 尝试转换为数值类型，以支持整数形式的RING参数
             ring_number = float(ring_number)
         except (ValueError, TypeError):
             return jsonify({
@@ -761,7 +761,6 @@ def get_risk_level():
                 "message": f"环号参数格式错误: {ring_number}"
             }), 400
 
-        # 查询数据库获取环数据
         ring_data = query_ring_data(ring_number)
         if not ring_data:
             return jsonify({
@@ -770,9 +769,23 @@ def get_risk_level():
                 "suggestion": "请检查环号是否正确或联系管理员"
             }), 404
 
-        # 始终按“环的序列”进行评估：将单点统一包装为列表并使用序列评估与汇总
         original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
         risk_results = aggregate_ring_risk_results(original_ring_data, current_ring_number=ring_number)
+
+        try:
+            center_int = int(float(ring_number))
+        except Exception:
+            center_int = int(ring_number)
+        try:
+            start_ring = center_int - 5
+        except Exception:
+            start_ring = center_int - 5
+        preload_map = {}
+        for r in range(start_ring, center_int + 1):
+            try:
+                preload_map[r] = query_ring_data(r) or []
+            except Exception:
+                preload_map[r] = []
         result = {
             "status": "success",
             "ring": int(ring_number),
@@ -781,18 +794,12 @@ def get_risk_level():
             "mdr_seal_risk": {},
             "tail_seal_risk": {}
         }
-        # 规范化环数据为列表，便于后续关键参数填充与时间处理
         ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
         for risk in risk_results:
             risk_type = risk['risk_type']
-            # 移除未使用的risk_info与参数值冗余处理
-
-            # 根据风险类型存储结果
+            
             if risk_type == "结泥饼风险":
-                # 映射风险类型名称
                 risk_type_mapped = "结泥饼"
-
-                # 判断是否满足“前5环 + 当前环”的连续数据要求，不足则返回空列表
                 multi_ring_data = query_consecutive_ring_data(ring_number, count=6)
                 try:
                     required_rings = {int(float(ring_number)) - i for i in range(0, 6)}
@@ -810,16 +817,22 @@ def get_risk_level():
                     result["mud_cake_risk"] = []
                     continue
 
-                # 构建风险对象（直接使用已汇总的序列风险结果，避免重复推理）
+                fm = risk["measures"]
+                try:
+                    if isinstance(fm, list):
+                        fm = "，".join([str(x) for x in fm])
+                except Exception:
+                    pass
+                imp = "刀盘转速，刀盘扭矩，总推力，推进速度"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
                     "project_name": PROJECT_NAME,
-                    "fault_measures": risk["measures"],
+                    "fault_measures": fm,
                     "fault_reason": risk["reason"],
                     "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
                     "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
-                    "impact_parameters": ["刀盘转速", "刀盘扭矩", "总推力", "推进速度"],
+                    "impact_parameters": imp,
                     "safety_level": risk["risk_level"],
                     "risk_level": map_safety_to_level(risk["risk_level"]),
                     "risk_score": round(risk["risk_score"], 2),
@@ -829,9 +842,7 @@ def get_risk_level():
                     "warning_parameters": "-",
                 }
 
-                # 使用序列评估返回的“当前环”最早触发时刻，参数取当前环首个点
                 earliest_time_raw = risk.get("earliest_time")
-                # 当前环首个点参数
                 earliest_params = None
                 try:
                     first_point = next((p for p in multi_ring_data if int(float(p.get('RING', -1))) == int(result["ring"])), None)
@@ -848,7 +859,6 @@ def get_risk_level():
 
                 if earliest_params:
                     earliest_params = round_params(earliest_params)
-                # 仅当整环被判定为中/高风险时才输出预警时间
                 final_level_text = risk.get("risk_level", "")
                 should_warn_time = final_level_text in ("中风险Ⅲ", "高风险Ⅳ")
                 risk_out["warning_time"] = (
@@ -857,24 +867,37 @@ def get_risk_level():
                 )
                 risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
 
-                # 关键参数六环原始数据
                 mud_fields = ["DP_SD", "DP_ZJ", "TJSD", "TJL", "DP_SS_ZTL"]
-                risk_out["key_parameters"] = collect_key_parameters(ring_number, mud_fields, count=6)
+                mud_map = {
+                    "DP_SD": "刀盘转速",
+                    "DP_ZJ": "刀盘扭矩",
+                    "TJSD": "推进速度",
+                    "TJL": "总推力",
+                    "DP_SS_ZTL": "刀盘伸缩总推力",
+                }
+                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
 
                 result["mud_cake_risk"] = risk_out
 
             elif risk_type == "滞排风险":
                 risk_type_mapped = "滞排"
 
+                fm = risk["measures"]
+                try:
+                    if isinstance(fm, list):
+                        fm = "，".join([str(x) for x in fm])
+                except Exception:
+                    pass
+                imp = "开挖仓压力，工作仓压力，排浆泵P2.1进泥口压力检测"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
                     "project_name": PROJECT_NAME,
-                    "fault_measures": risk["measures"],
+                    "fault_measures": fm,
                     "fault_reason": risk["reason"],
                     "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
                     "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
-                    "impact_parameters": ["开挖仓压力", "工作仓压力", "排浆泵P2.1进泥口压力检测"],
+                    "impact_parameters": imp,
                     "safety_level": risk["risk_level"],
                     "risk_level": map_safety_to_level(risk["risk_level"]),
                     "risk_score": round(risk["risk_score"], 2),
@@ -885,7 +908,6 @@ def get_risk_level():
                 }
 
 
-                # 计算预警时间：要求“连续N次≥中风险”后触发，记录该段起点时刻
                 earliest_time_raw = None
                 earliest_params = None
                 consec = 0
@@ -924,24 +946,35 @@ def get_risk_level():
                 )
                 risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
 
-                # 关键参数六环原始数据
                 clog_fields = ["GZC_PRS1", "KWC_PRS4", "PJB_JNK_PRS2.1"]
-                risk_out["key_parameters"] = collect_key_parameters(ring_number, clog_fields, count=6)
+                clog_map = {
+                    "GZC_PRS1": "工作仓压力",
+                    "KWC_PRS4": "开挖仓压力",
+                    "PJB_JNK_PRS2.1": "排浆泵P2.1进泥口压力检测",
+                }
+                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
 
                 result["clog_risk"] = risk_out
 
             elif risk_type == "主驱动密封失效风险":
                 risk_type_mapped = "主驱动密封失效"
 
+                fm = risk["measures"]
+                try:
+                    if isinstance(fm, list):
+                        fm = "，".join([str(x) for x in fm])
+                except Exception:
+                    pass
+                imp = "工作仓压力，油气密封反馈压力，主驱动伸缩密封油脂压力，齿轮油油气密封压力"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
                     "project_name": PROJECT_NAME,
-                    "fault_measures": risk["measures"],
+                    "fault_measures": fm,
                     "fault_reason": risk["reason"],
                     "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
                     "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-                    "impact_parameters": ["工作仓压力", "油气密封反馈压力", "主驱动伸缩密封油脂压力", "齿轮油油气密封压力"],
+                    "impact_parameters": imp,
                     "safety_level": risk["risk_level"],
                     "risk_level": map_safety_to_level(risk["risk_level"]),
                     "risk_score": round(risk["risk_score"], 2),
@@ -952,7 +985,6 @@ def get_risk_level():
                 }
 
 
-                # 计算预警时间：要求“连续N次≥中风险”后触发，记录该段起点时刻
                 earliest_time_raw = None
                 earliest_params = None
                 consec = 0
@@ -994,30 +1026,42 @@ def get_risk_level():
                 risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
                 result["mdr_seal_risk"] = risk_out
 
-                # 关键参数六环原始数据
                 mdr_fields = ["CLY_YQ_PRS", "GZC_PRS1", "YQMF_FK_PRS", "YQMF_XLJC_QPRS", "ZQD_SS_PRS1"]
-                risk_out["key_parameters"] = collect_key_parameters(ring_number, mdr_fields, count=6)
+                mdr_map = {
+                    "CLY_YQ_PRS": "齿轮油油气密封压力",
+                    "GZC_PRS1": "工作仓压力",
+                    "YQMF_FK_PRS": "油气密封反馈压力",
+                    "YQMF_XLJC_QPRS": "密封检测压力",
+                    "ZQD_SS_PRS1": "主驱动伸缩密封油脂压力",
+                }
+                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
 
             elif risk_type == "盾尾密封失效风险":
                 risk_type_mapped = "盾尾密封失效"
+                fm = risk["measures"]
+                try:
+                    if isinstance(fm, list):
+                        fm = "，".join([str(x) for x in fm])
+                except Exception:
+                    pass
+                imp = "盾尾密封压力4.2，盾尾密封压力4.4，注浆压力1，注浆压力2"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
                     "project_name": PROJECT_NAME,
-                    "fault_measures": risk["measures"],
+                    "fault_measures": fm,
                     "fault_reason": risk["reason"],
                     "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
                     "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-                    "impact_parameters": ["盾尾密封压力4.2", "盾尾密封压力4.4", "注浆压力1", "注浆压力2"],
+                    "impact_parameters": imp,
                     "safety_level": risk["risk_level"],
                     "risk_level": map_safety_to_level(risk["risk_level"]),
                     "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"], 2),
+                    "probability": round(risk["probability"] , 2),
                     "potential_risk": risk["potential_risk"],
                     "warning_time": "-",
                     "warning_parameters": "-",
                 }
-                # 计算预警时间：要求“连续N次≥中风险”后触发，记录该段起点时刻
                 earliest_time_raw = None
                 earliest_params = None
                 consec = 0
@@ -1055,9 +1099,14 @@ def get_risk_level():
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
                 risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
-                # 关键参数六环原始数据
                 tail_fields = ["AYB_PRS1_1", "AYB_PRS1_2", "DW_PRS4.2", "DW_PRS4.4"]
-                risk_out["key_parameters"] = collect_key_parameters(ring_number, tail_fields, count=6)
+                tail_map = {
+                    "AYB_PRS1_1": "注浆压力1",
+                    "AYB_PRS1_2": "注浆压力2",
+                    "DW_PRS4.2": "盾尾密封压力4.2",
+                    "DW_PRS4.4": "盾尾密封压力4.4",
+                }
+                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
                 result["tail_seal_risk"] = risk_out
         return jsonify(result)
     except Exception as e:
@@ -1480,6 +1529,21 @@ def _dash(val):
     except Exception:
         return val
 
+def _rename_keys(items, mapping):
+    try:
+        renamed = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                renamed.append(it)
+                continue
+            new_it = {}
+            for k, v in it.items():
+                mk = mapping.get(k, k)
+                new_it[mk] = v
+            renamed.append(new_it)
+        return renamed
+    except Exception:
+        return items
 @bp.route('/getAllRiskRecords', methods=['GET'])
 def get_all_risk_records():
     try:
