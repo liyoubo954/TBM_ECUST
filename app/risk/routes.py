@@ -1089,11 +1089,21 @@ class _MySQLConnectionPool:
             database=self._database,
             charset=self._charset,
             cursorclass=self._cursorclass,
+            autocommit=True,
+            connect_timeout=10,
         )
 
     def acquire(self):
         try:
             conn = self._pool.get_nowait()
+            try:
+                conn.ping(reconnect=True)
+            except Exception:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                conn = self._create_conn()
             return conn
         except Exception:
             with self._lock:
@@ -1125,7 +1135,13 @@ class _PooledConnection:
 
     def __exit__(self, exc_type, exc, tb):
         try:
-            self._pool.release(self._conn)
+            if exc_type is not None:
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
+            else:
+                self._pool.release(self._conn)
         except Exception:
             try:
                 self._conn.close()
