@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 from influxdb import InfluxDBClient
-from config import Config
 from app.risk.utils.clog_risk import calculate_clog_risk
 from app.risk.utils.mdr_seal_risk import calculate_mdr_seal_risk
 from app.risk.utils.tail_seal_risk import calculate_tail_seal_risk
@@ -16,14 +15,23 @@ import queue
 
 CONSECUTIVE_TRIGGER_N = int(os.environ.get('CONSECUTIVE_TRIGGER_N', '3'))
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "通苏嘉甬")
+INFLUXDB_HOST = os.environ.get('INFLUXDB_HOST') or '192.168.211.108'
+INFLUXDB_PORT = int(os.environ.get('INFLUXDB_PORT') or 38086)
+INFLUXDB_USERNAME = os.environ.get('INFLUXDB_USERNAME') or 'admin'
+INFLUXDB_PASSWORD = os.environ.get('INFLUXDB_PASSWORD') or 'FZaStb0cXFuFbehPBM6YHCiuAAX6QIXr'
+INFLUXDB_DATABASE = os.environ.get('INFLUXDB_DATABASE') or 'algorithm'
+INFLUXDB_MEASUREMENT = os.environ.get('INFLUXDB_MEASUREMENT') or 'tsjy_dz1360_riskwarning'
+INFLUXDB_TIMEOUT = int(os.environ.get('INFLUXDB_TIMEOUT') or 10)
 client = InfluxDBClient(
-    host=Config.INFLUXDB_HOST,
-    port=Config.INFLUXDB_PORT,
-    username=Config.INFLUXDB_USERNAME,
-    password=Config.INFLUXDB_PASSWORD,
-    database=Config.INFLUXDB_DATABASE,
-    timeout=Config.INFLUXDB_TIMEOUT
+    host=INFLUXDB_HOST,
+    port=INFLUXDB_PORT,
+    username=INFLUXDB_USERNAME,
+    password=INFLUXDB_PASSWORD,
+    database=INFLUXDB_DATABASE,
+    timeout=INFLUXDB_TIMEOUT
 )
+
+
 class RiskAssessor:
     def __init__(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +55,7 @@ class RiskAssessor:
             self.mud_cake_calculator = None
         else:
             self.mud_cake_calculator = MudCakeRiskCalculator(model_type='unified', model_dir=self.model_dir)
+
     def _format_mud_cake_point(self, point):
         property_dict = {}
         try:
@@ -78,7 +87,6 @@ class RiskAssessor:
             'ring': point.get('RING', 0)
         }
         return formatted
-
 
     def assess_mud_cake_risk_sequence(self, ring_points):
         try:
@@ -440,8 +448,6 @@ def format_time_utc_to_shanghai(time_str: str) -> str:
         return time_str
 
 
-
-
 def _round_value_2(v):
     try:
         if isinstance(v, (int, float)):
@@ -656,18 +662,18 @@ def query_ring_data(ring_number):
     try:
         ring_formatted = f"{int(float(ring_number))}.00"
         query_exact = f"""
-        SELECT * FROM "{Config.INFLUXDB_MEASUREMENT}" 
+        SELECT * FROM "{INFLUXDB_MEASUREMENT}" 
         WHERE "RING"='{ring_formatted}' 
         ORDER BY time ASC
         """
         query_numeric = f"""
-        SELECT * FROM "{Config.INFLUXDB_MEASUREMENT}" 
+        SELECT * FROM "{INFLUXDB_MEASUREMENT}" 
         WHERE "RING"={float(ring_number)} 
         ORDER BY time ASC
         """
         ring_int_val = int(float(ring_number))
         query_range = f"""
-        SELECT * FROM "{Config.INFLUXDB_MEASUREMENT}" 
+        SELECT * FROM "{INFLUXDB_MEASUREMENT}" 
         WHERE "RING" >= {ring_int_val} AND "RING" < {ring_int_val + 1} 
         ORDER BY time ASC
         """
@@ -797,7 +803,7 @@ def get_risk_level():
         ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
         for risk in risk_results:
             risk_type = risk['risk_type']
-            
+
             if risk_type == "结泥饼风险":
                 risk_type_mapped = "结泥饼"
                 multi_ring_data = query_consecutive_ring_data(ring_number, count=6)
@@ -845,7 +851,8 @@ def get_risk_level():
                 earliest_time_raw = risk.get("earliest_time")
                 earliest_params = None
                 try:
-                    first_point = next((p for p in multi_ring_data if int(float(p.get('RING', -1))) == int(result["ring"])), None)
+                    first_point = next(
+                        (p for p in multi_ring_data if int(float(p.get('RING', -1))) == int(result["ring"])), None)
                     if first_point:
                         earliest_params = {
                             "DP_SD": first_point.get("DP_SD"),
@@ -875,7 +882,8 @@ def get_risk_level():
                     "TJL": "总推力",
                     "DP_SS_ZTL": "刀盘伸缩总推力",
                 }
-                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
+                risk_out["key_parameters"] = _rename_keys(
+                    collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
 
                 result["mud_cake_risk"] = risk_out
 
@@ -906,7 +914,6 @@ def get_risk_level():
                     "warning_time": "-",
                     "warning_parameters": "-",
                 }
-
 
                 earliest_time_raw = None
                 earliest_params = None
@@ -952,7 +959,8 @@ def get_risk_level():
                     "KWC_PRS4": "开挖仓压力",
                     "PJB_JNK_PRS2.1": "排浆泵P2.1进泥口压力检测",
                 }
-                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
+                risk_out["key_parameters"] = _rename_keys(
+                    collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
 
                 result["clog_risk"] = risk_out
 
@@ -983,7 +991,6 @@ def get_risk_level():
                     "warning_time": "-",
                     "warning_parameters": "-",
                 }
-
 
                 earliest_time_raw = None
                 earliest_params = None
@@ -1034,7 +1041,8 @@ def get_risk_level():
                     "YQMF_XLJC_QPRS": "密封检测压力",
                     "ZQD_SS_PRS1": "主驱动伸缩密封油脂压力",
                 }
-                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
+                risk_out["key_parameters"] = _rename_keys(
+                    collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
 
             elif risk_type == "盾尾密封失效风险":
                 risk_type_mapped = "盾尾密封失效"
@@ -1057,7 +1065,7 @@ def get_risk_level():
                     "safety_level": risk["risk_level"],
                     "risk_level": map_safety_to_level(risk["risk_level"]),
                     "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"] , 2),
+                    "probability": round(risk["probability"], 2),
                     "potential_risk": risk["potential_risk"],
                     "warning_time": "-",
                     "warning_parameters": "-",
@@ -1106,7 +1114,8 @@ def get_risk_level():
                     "DW_PRS4.2": "盾尾密封压力4.2",
                     "DW_PRS4.4": "盾尾密封压力4.4",
                 }
-                risk_out["key_parameters"] = _rename_keys(collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
+                risk_out["key_parameters"] = _rename_keys(
+                    collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
                 result["tail_seal_risk"] = risk_out
         return jsonify(result)
     except Exception as e:
@@ -1115,6 +1124,8 @@ def get_risk_level():
             "status": "error",
             "error": f"获取数据时发生错误: {str(e)}"
         }), 500
+
+
 class _MySQLConnectionPool:
     def __init__(self, host, port, user, password, database, charset, cursorclass, maxsize=5):
         self._host = host
@@ -1171,6 +1182,7 @@ class _MySQLConnectionPool:
             except Exception:
                 pass
 
+
 class _PooledConnection:
     def __init__(self, pool, conn):
         self._pool = pool
@@ -1198,7 +1210,9 @@ class _PooledConnection:
                 pass
         return False
 
+
 _MYSQL_POOL = None
+
 
 def _mysql_connect():
     global _MYSQL_POOL
@@ -1223,6 +1237,8 @@ def _mysql_connect():
         return _PooledConnection(_MYSQL_POOL, raw)
     except Exception as e:
         raise RuntimeError(f"MySQL连接失败: {e}")
+
+
 def _normalize_safety_level(level):
     try:
         if not level:
@@ -1241,6 +1257,8 @@ def _normalize_safety_level(level):
         return "无风险Ⅰ"
     except Exception:
         return "无风险Ⅰ"
+
+
 def get_fault_reason_analysis(risk_type: str, risk_level: str) -> str:
     try:
         t = str(risk_type)
@@ -1280,6 +1298,8 @@ def get_fault_reason_analysis(risk_type: str, risk_level: str) -> str:
         return "当前等级暂无更详细分析"
     except Exception:
         return "当前等级暂无更详细分析"
+
+
 def _fetch_latest_row(conn, table):
     with conn.cursor() as cur:
         try:
@@ -1291,6 +1311,8 @@ def _fetch_latest_row(conn, table):
             pass
         cur.execute(f"SELECT * FROM `{table}` ORDER BY `ring` DESC LIMIT 1")
         return cur.fetchone()
+
+
 @bp.route('/getLatestRiskLevel', methods=['GET'])
 def get_latest_risk_level():
     try:
@@ -1341,6 +1363,7 @@ def get_latest_risk_level():
                                 pass
         if latest_ring is None:
             return jsonify({"status": "error", "error": "MySQL未找到最新环数据"}), 404
+
         def _get_any(row, keys):
             for key in keys:
                 try:
@@ -1492,6 +1515,8 @@ def get_latest_risk_level():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "error": f"获取最新环数据时发生错误: {str(e)}"}), 500
+
+
 def query_consecutive_ring_data(center_ring, count=6):
     """按中心环号向前取 count-1 个环并包含中心环，共计 count 个连续环的数据，按时间升序合并返回。
     若某些前置环缺失，则仅返回可用的向前数据，不进行向后补齐。"""
@@ -1517,6 +1542,7 @@ def query_consecutive_ring_data(center_ring, count=6):
         # 安全回退：返回空列表，避免未定义变量导致异常
         return []
 
+
 def _dash(val):
     try:
         if val is None:
@@ -1528,6 +1554,7 @@ def _dash(val):
         return val
     except Exception:
         return val
+
 
 def _rename_keys(items, mapping):
     try:
@@ -1544,6 +1571,8 @@ def _rename_keys(items, mapping):
         return renamed
     except Exception:
         return items
+
+
 @bp.route('/getAllRiskRecords', methods=['GET'])
 def get_all_risk_records():
     try:
@@ -1561,14 +1590,17 @@ def get_all_risk_records():
         with conn:
             with conn.cursor() as cur:
                 for label, table in tables.items():
-                    cur.execute(f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` FROM `{table}`")
+                    cur.execute(
+                        f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` FROM `{table}`")
                     rows = cur.fetchall() or []
+
                     def _is_target_level(v):
                         try:
                             s = str(v)
                             return ("Ⅱ" in s) or ("Ⅲ" in s) or ("Ⅳ" in s) or ("II" in s) or ("III" in s) or ("IV" in s)
                         except Exception:
                             return False
+
                     for row in rows:
                         ring_val = row.get("ring")
                         try:
@@ -1581,7 +1613,8 @@ def get_all_risk_records():
                                 wp = json.loads(wp)
                         except Exception:
                             pass
-                        if wp is None or (isinstance(wp, str) and (wp.strip() == "" or wp.strip().lower() in ("null", "none"))):
+                        if wp is None or (
+                                isinstance(wp, str) and (wp.strip() == "" or wp.strip().lower() in ("null", "none"))):
                             wp = "-"
                         fm = row.get("fault_measures")
                         try:
@@ -1589,7 +1622,8 @@ def get_all_risk_records():
                                 fm = json.loads(fm)
                         except Exception:
                             pass
-                        if fm is None or (isinstance(fm, str) and (fm.strip() == "" or fm.strip().lower() in ("null", "none"))):
+                        if fm is None or (
+                                isinstance(fm, str) and (fm.strip() == "" or fm.strip().lower() in ("null", "none"))):
                             fm = "-"
                         level_raw = row.get("risk_level")
                         if not _is_target_level(level_raw):
@@ -1614,12 +1648,14 @@ def get_all_risk_records():
                             "fault_measures": fm,
                         }
                         records.append(rec)
+
         def _ring_num(rec):
             r = rec.get("ring")
             try:
                 return int(float(r))
             except Exception:
                 return -1
+
         records.sort(key=lambda rec: _ring_num(rec), reverse=True)
 
         return jsonify({
