@@ -616,7 +616,6 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None):
         original_ring_data = [original_ring_data] if original_ring_data else []
 
     risk_by_type = {}
-    errors = []
     for point in original_ring_data:
         if isinstance(point, dict):
             try:
@@ -626,8 +625,7 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None):
                     if rt and rt != "结泥饼风险":
                         risk_by_type.setdefault(rt, []).append(r)
             except Exception as e:
-                # 跳过该时刻的无效数据点
-                errors.append(str(e))
+                pass
                 continue
 
     final_results = []
@@ -648,7 +646,7 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None):
         if isinstance(seq_risk, dict):
             final_results.append(seq_risk)
     except Exception as e:
-        errors.append(str(e))
+        pass
 
     # 若所有风险类型均无有效数据结果，则抛错而不是返回固定值
     if not final_results:
@@ -800,6 +798,34 @@ def get_risk_level():
             "mdr_seal_risk": {},
             "tail_seal_risk": {}
         }
+        def _to_plain_string(v):
+            try:
+                if isinstance(v, list):
+                    return "，".join([str(x) for x in v])
+                if isinstance(v, dict):
+                    return "，".join([str(k) for k in v.keys()])
+                if isinstance(v, str):
+                    s = v.strip()
+                    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                        try:
+                            d = json.loads(s)
+                            if isinstance(d, (list, dict)):
+                                return _to_plain_string(d)
+                            return str(d)
+                        except Exception:
+                            return s[1:-1]
+                    if s.startswith("[") or s.startswith("{"):
+                        try:
+                            d = json.loads(s)
+                            return _to_plain_string(d)
+                        except Exception:
+                            return v
+                    return v
+                if v is None:
+                    return "-"
+                return str(v)
+            except Exception:
+                return "-" if v is None else str(v)
         ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
         for risk in risk_results:
             risk_type = risk['risk_type']
@@ -829,7 +855,9 @@ def get_risk_level():
                         fm = "，".join([str(x) for x in fm])
                 except Exception:
                     pass
+                fm = _to_plain_string(fm)
                 imp = "刀盘转速，刀盘扭矩，总推力，推进速度"
+                imp = "盾尾密封压力4.2，盾尾密封压力4.4，1#A液泵出口压力，2#A液泵出口压力"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -872,7 +900,6 @@ def get_risk_level():
                     format_time_utc_to_shanghai(earliest_time_raw)
                     if should_warn_time and earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
-                risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
 
                 mud_fields = ["DP_SD", "DP_ZJ", "TJSD", "TJL", "DP_SS_ZTL"]
                 mud_map = {
@@ -882,6 +909,13 @@ def get_risk_level():
                     "TJL": "总推力",
                     "DP_SS_ZTL": "刀盘伸缩总推力",
                 }
+                try:
+                    if earliest_params:
+                        risk_out["warning_parameters"] = {mud_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                    else:
+                        risk_out["warning_parameters"] = "-"
+                except Exception:
+                    pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
 
@@ -896,7 +930,9 @@ def get_risk_level():
                         fm = "，".join([str(x) for x in fm])
                 except Exception:
                     pass
+                fm = _to_plain_string(fm)
                 imp = "开挖仓压力，工作仓压力，排浆泵P2.1进泥口压力检测"
+                imp = _to_plain_string(imp)
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -951,7 +987,6 @@ def get_risk_level():
                     format_time_utc_to_shanghai(earliest_time_raw)
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
-                risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
 
                 clog_fields = ["GZC_PRS1", "KWC_PRS4", "PJB_JNK_PRS2.1"]
                 clog_map = {
@@ -959,6 +994,13 @@ def get_risk_level():
                     "KWC_PRS4": "开挖仓压力",
                     "PJB_JNK_PRS2.1": "排浆泵P2.1进泥口压力检测",
                 }
+                try:
+                    if earliest_params:
+                        risk_out["warning_parameters"] = {clog_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                    else:
+                        risk_out["warning_parameters"] = "-"
+                except Exception:
+                    pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
 
@@ -973,7 +1015,9 @@ def get_risk_level():
                         fm = "，".join([str(x) for x in fm])
                 except Exception:
                     pass
+                fm = _to_plain_string(fm)
                 imp = "工作仓压力，油气密封反馈压力，主驱动伸缩密封油脂压力，齿轮油油气密封压力"
+                imp = _to_plain_string(imp)
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -1030,7 +1074,6 @@ def get_risk_level():
                     format_time_utc_to_shanghai(earliest_time_raw)
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
-                risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
                 result["mdr_seal_risk"] = risk_out
 
                 mdr_fields = ["CLY_YQ_PRS", "GZC_PRS1", "YQMF_FK_PRS", "YQMF_XLJC_QPRS", "ZQD_SS_PRS1"]
@@ -1041,6 +1084,13 @@ def get_risk_level():
                     "YQMF_XLJC_QPRS": "密封检测压力",
                     "ZQD_SS_PRS1": "主驱动伸缩密封油脂压力",
                 }
+                try:
+                    if earliest_params:
+                        risk_out["warning_parameters"] = {mdr_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                    else:
+                        risk_out["warning_parameters"] = "-"
+                except Exception:
+                    pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
 
@@ -1052,7 +1102,9 @@ def get_risk_level():
                         fm = "，".join([str(x) for x in fm])
                 except Exception:
                     pass
+                fm = _to_plain_string(fm)
                 imp = "盾尾密封压力4.2，盾尾密封压力4.4，注浆压力1，注浆压力2"
+                imp = _to_plain_string(imp)
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -1106,14 +1158,20 @@ def get_risk_level():
                     format_time_utc_to_shanghai(earliest_time_raw)
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
-                risk_out["warning_parameters"] = earliest_params if earliest_params else "-"
                 tail_fields = ["AYB_PRS1_1", "AYB_PRS1_2", "DW_PRS4.2", "DW_PRS4.4"]
                 tail_map = {
-                    "AYB_PRS1_1": "注浆压力1",
-                    "AYB_PRS1_2": "注浆压力2",
+                    "AYB_PRS1_1": "1#A液泵出口压力",
+                    "AYB_PRS1_2": "2#A液泵出口压力",
                     "DW_PRS4.2": "盾尾密封压力4.2",
                     "DW_PRS4.4": "盾尾密封压力4.4",
                 }
+                try:
+                    if earliest_params:
+                        risk_out["warning_parameters"] = {tail_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                    else:
+                        risk_out["warning_parameters"] = "-"
+                except Exception:
+                    pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
                 result["tail_seal_risk"] = risk_out
@@ -1386,7 +1444,16 @@ def get_latest_risk_level():
                 if isinstance(val, str):
                     s = val.strip()
                     if s.startswith("[") or s.startswith("{"):
-                        return json.loads(s)
+                        try:
+                            return json.loads(s)
+                        except Exception:
+                            return val
+                    # 解析被JSON编码的纯字符串（例如 "\"文本\""）
+                    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                        try:
+                            return json.loads(s)
+                        except Exception:
+                            return s[1:-1]
                     if s == "" or s.lower() in ("null", "none"):
                         return "-"
                 if val is None:
@@ -1417,32 +1484,11 @@ def get_latest_risk_level():
             except Exception:
                 ring_num = _dash(ring_val)
 
-            # fault_measures
             fm = _get_any(row, ["fault_measures", "measures"])
-            fm = _parse_jsonish(fm)
-            fm = fm if fm not in (None, "") else "-"
+            fm = _decode_json_string(fm)
 
-            # impact_parameters 优先取数据库，否则用meta
             ip = row.get("impact_parameters")
-            ip = _parse_jsonish(ip)
-            if ip in (None, "-"):
-                ip = meta.get("impact_parameters", "-")
-            if meta.get("risk_type") == "结泥饼":
-                try:
-                    mp = meta.get("impact_parameters")
-                    if isinstance(mp, list):
-                        if isinstance(ip, list):
-                            seen = set()
-                            out = []
-                            for x in ip + mp:
-                                if x not in seen:
-                                    seen.add(x)
-                                    out.append(x)
-                            ip = out
-                        else:
-                            ip = mp
-                except Exception:
-                    pass
+            ip = _decode_json_string(ip)
 
             kp = row.get("key_parameters")
             kp = _parse_jsonish(kp)
@@ -1468,28 +1514,24 @@ def get_latest_risk_level():
                 "risk_type": "滞排",
                 "impact_parameters": ["开挖仓压力", "工作仓压力", "排浆泵P2.1进泥口压力检测"],
                 "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
-                "default_reason": "开挖仓压力稳定，工作仓压力正常，排浆泵压力平稳，排泥系统运行平稳，渣土含水率适宜，排泥管道通畅，刀盘转速和刀盘扭矩保持稳定，渣土排出连续顺畅。",
             },
             "主驱动密封失效": {
                 "result_key": "mdr_seal_risk",
                 "risk_type": "主驱动密封失效",
                 "impact_parameters": ["工作仓压力", "油气密封反馈压力", "主驱动伸缩密封油脂压力", "齿轮油油气密封压力"],
                 "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-                "default_reason": "工作仓压力稳定，密封反馈压力正常，主驱动密封压力适宜，刀盘转速平稳，刀盘扭矩稳定，密封检测压力在安全范围内，密封系统运行参数均在理想范围内。",
             },
             "结泥饼": {
                 "result_key": "mud_cake_risk",
                 "risk_type": "结泥饼",
                 "impact_parameters": ["刀盘转速", "刀盘扭矩", "总推力", "推进速度", "刀盘伸缩总推力"],
                 "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
-                "default_reason": "扭矩略有波动，推进速度轻微下降，贯入度变化不大，土体粘性略有增加，但渣土排出仍然顺畅，设备负荷在安全范围内。",
             },
             "盾尾密封失效": {
                 "result_key": "tail_seal_risk",
                 "risk_type": "盾尾密封失效",
-                "impact_parameters": ["盾尾密封压力4.2", "盾尾密封压力4.4", "注浆压力1", "注浆压力2"],
+                "impact_parameters": ["盾尾密封压力4.2", "盾尾密封压力4.4", "1#A液泵出口压力", "2#A液泵出口压力"],
                 "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-                "default_reason": "密封压力稳定，泵出口压力正常，注脂量适宜，刀盘转速平稳，刀盘扭矩稳定，密封圈弹性良好，无渗水迹象，密封腔压力分布均匀，系统运行状态理想。",
             },
         }
 
@@ -1556,6 +1598,24 @@ def _dash(val):
         return val
 
 
+def _decode_json_string(val):
+    try:
+        if isinstance(val, str):
+            s = val.strip()
+            if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                try:
+                    return json.loads(s)
+                except Exception:
+                    return s[1:-1]
+            if s == "" or s.lower() in ("null", "none"):
+                return "-"
+        if val is None:
+            return "-"
+        return val
+    except Exception:
+        return val
+
+
 def _rename_keys(items, mapping):
     try:
         renamed = []
@@ -1583,13 +1643,27 @@ def get_all_risk_records():
             "结泥饼": "mud_cake_risk",
             "盾尾密封失效": "tail_seal_risk",
         }
+        risk_type_param = request.args.get("risk_type")
+        if not risk_type_param:
+            body = request.get_json(silent=True) or {}
+            risk_type_param = body.get("risk_type")
+        if risk_type_param:
+            rp = str(risk_type_param).strip()
+            if rp.endswith("风险"):
+                rp = rp[:-2]
+            table = tables.get(rp)
+            if not table:
+                return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(tables.keys())}), 400
+            loop_items = [(rp, table)]
+        else:
+            loop_items = list(tables.items())
         records = []
         high_count = 0
         mid_count = 0
         low_count = 0
         with conn:
             with conn.cursor() as cur:
-                for label, table in tables.items():
+                for label, table in loop_items:
                     cur.execute(
                         f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` FROM `{table}`")
                     rows = cur.fetchall() or []
@@ -1617,11 +1691,7 @@ def get_all_risk_records():
                                 isinstance(wp, str) and (wp.strip() == "" or wp.strip().lower() in ("null", "none"))):
                             wp = "-"
                         fm = row.get("fault_measures")
-                        try:
-                            if isinstance(fm, str) and (fm.strip().startswith("[") or fm.strip().startswith("{")):
-                                fm = json.loads(fm)
-                        except Exception:
-                            pass
+                        fm = _decode_json_string(fm)
                         if fm is None or (
                                 isinstance(fm, str) and (fm.strip() == "" or fm.strip().lower() in ("null", "none"))):
                             fm = "-"
