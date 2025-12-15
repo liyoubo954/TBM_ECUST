@@ -318,7 +318,7 @@ class RiskAssessor:
                 "reason": reason,
                 "potential_risk": potential_risk,
                 "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
-                "impact_parameters": ["开挖仓压力", "工作仓压力", "排浆泵P2.1进泥口压力检测"],
+                "impact_parameters": ["工作仓压力1#", "开挖仓压力4", "排浆泵P2.1进泥口压力检测"],
             }
         except Exception as e:
             raise
@@ -339,7 +339,7 @@ class RiskAssessor:
                 "reason": reason,
                 "potential_risk": potential_risk,
                 "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-                "impact_parameters": ["工作仓压力", "油气密封反馈压力", "主驱动伸缩密封油脂压力", "齿轮油油气密封压力"],
+                "impact_parameters": ["工作仓压力1#", "油气密封反馈压力", "1#主驱动伸缩密封油脂压力", "齿轮油油气密封压力", "油气密封泄露检测腔压力"],
             }
         except Exception as e:
             raise
@@ -361,7 +361,7 @@ class RiskAssessor:
                 "reason": reason,
                 "potential_risk": potential_risk,
                 "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-                "impact_parameters": ["盾尾密封压力4.2", "盾尾密封压力4.4", "注浆压力1", "注浆压力2"],
+                "impact_parameters": ["盾尾密封压力4.2", "盾尾密封压力4.4", "1#A液泵出口压力", "2#A液泵出口压力"],
             }
         except Exception as e:
             raise
@@ -791,7 +791,6 @@ def get_risk_level():
             except Exception:
                 preload_map[r] = []
         result = {
-            "status": "success",
             "ring": int(ring_number),
             "mud_cake_risk": {},
             "clog_risk": {},
@@ -856,8 +855,7 @@ def get_risk_level():
                 except Exception:
                     pass
                 fm = _to_plain_string(fm)
-                imp = "刀盘转速，刀盘扭矩，总推力，推进速度"
-                imp = "盾尾密封压力4.2，盾尾密封压力4.4，1#A液泵出口压力，2#A液泵出口压力"
+                imp = "刀盘转速，刀盘扭矩，总推力，推进速度，刀盘伸缩总推力"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -931,8 +929,7 @@ def get_risk_level():
                 except Exception:
                     pass
                 fm = _to_plain_string(fm)
-                imp = "开挖仓压力，工作仓压力，排浆泵P2.1进泥口压力检测"
-                imp = _to_plain_string(imp)
+                imp = "工作仓压力1#，开挖仓压力4，排浆泵P2.1进泥口压力检测"
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -990,8 +987,8 @@ def get_risk_level():
 
                 clog_fields = ["GZC_PRS1", "KWC_PRS4", "PJB_JNK_PRS2.1"]
                 clog_map = {
-                    "GZC_PRS1": "工作仓压力",
-                    "KWC_PRS4": "开挖仓压力",
+                    "GZC_PRS1": "工作仓压力1#",
+                    "KWC_PRS4": "开挖仓压力4",
                     "PJB_JNK_PRS2.1": "排浆泵P2.1进泥口压力检测",
                 }
                 try:
@@ -1016,7 +1013,7 @@ def get_risk_level():
                 except Exception:
                     pass
                 fm = _to_plain_string(fm)
-                imp = "工作仓压力，油气密封反馈压力，主驱动伸缩密封油脂压力，齿轮油油气密封压力"
+                imp = "工作仓压力1#，油气密封反馈压力，1#主驱动伸缩密封油脂压力，齿轮油油气密封压力，油气密封泄露检测腔压力"
                 imp = _to_plain_string(imp)
                 risk_out = {
                     "risk_type": risk_type_mapped,
@@ -1078,11 +1075,11 @@ def get_risk_level():
 
                 mdr_fields = ["CLY_YQ_PRS", "GZC_PRS1", "YQMF_FK_PRS", "YQMF_XLJC_QPRS", "ZQD_SS_PRS1"]
                 mdr_map = {
-                    "CLY_YQ_PRS": "齿轮油油气密封压力",
-                    "GZC_PRS1": "工作仓压力",
+                    "GZC_PRS1": "工作仓压力1#",
                     "YQMF_FK_PRS": "油气密封反馈压力",
-                    "YQMF_XLJC_QPRS": "密封检测压力",
-                    "ZQD_SS_PRS1": "主驱动伸缩密封油脂压力",
+                    "ZQD_SS_PRS1": "1#主驱动伸缩密封油脂压力",
+                    "CLY_YQ_PRS": "齿轮油油气密封压力",
+                    "YQMF_XLJC_QPRS": "油气密封泄露检测腔压力",
                 }
                 try:
                     if earliest_params:
@@ -1103,8 +1100,14 @@ def get_risk_level():
                 except Exception:
                     pass
                 fm = _to_plain_string(fm)
-                imp = "盾尾密封压力4.2，盾尾密封压力4.4，注浆压力1，注浆压力2"
-                imp = _to_plain_string(imp)
+                tail_fields = ["AYB_PRS1_1", "AYB_PRS1_2", "DW_PRS4.2", "DW_PRS4.4"]
+                tail_map = {
+                    "AYB_PRS1_1": "1#A液泵出口压力",
+                    "AYB_PRS1_2": "2#A液泵出口压力",
+                    "DW_PRS4.2": "盾尾密封压力4.2",
+                    "DW_PRS4.4": "盾尾密封压力4.4",
+                }
+                imp = "，".join([tail_map[k] for k in tail_fields])
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -1158,13 +1161,7 @@ def get_risk_level():
                     format_time_utc_to_shanghai(earliest_time_raw)
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
-                tail_fields = ["AYB_PRS1_1", "AYB_PRS1_2", "DW_PRS4.2", "DW_PRS4.4"]
-                tail_map = {
-                    "AYB_PRS1_1": "1#A液泵出口压力",
-                    "AYB_PRS1_2": "2#A液泵出口压力",
-                    "DW_PRS4.2": "盾尾密封压力4.2",
-                    "DW_PRS4.4": "盾尾密封压力4.4",
-                }
+                # tail_fields 和 tail_map 已在上方定义
                 try:
                     if earliest_params:
                         risk_out["warning_parameters"] = {tail_map.get(k, k): earliest_params.get(k) for k in earliest_params}
@@ -1512,13 +1509,13 @@ def get_latest_risk_level():
             "滞排": {
                 "result_key": "clog_risk",
                 "risk_type": "滞排",
-                "impact_parameters": ["开挖仓压力", "工作仓压力", "排浆泵P2.1进泥口压力检测"],
+                "impact_parameters": ["工作仓压力1#", "开挖仓压力4", "排浆泵P2.1进泥口压力检测"],
                 "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
             },
             "主驱动密封失效": {
                 "result_key": "mdr_seal_risk",
                 "risk_type": "主驱动密封失效",
-                "impact_parameters": ["工作仓压力", "油气密封反馈压力", "主驱动伸缩密封油脂压力", "齿轮油油气密封压力"],
+                "impact_parameters": ["工作仓压力1#", "油气密封反馈压力", "1#主驱动伸缩密封油脂压力", "齿轮油油气密封压力", "油气密封泄露检测腔压力"],
                 "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
             },
             "结泥饼": {
