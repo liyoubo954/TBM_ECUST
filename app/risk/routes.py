@@ -269,39 +269,7 @@ class RiskAssessor:
             else:
                 return 4.0 - probability * 0.5 / 0.3
 
-    def assess_mud_cake_risk(self, data):
-        try:
-            if self.mud_cake_calculator is None:
-                raise Exception("结泥饼风险计算器不可用")
-
-            # 依据环号读取相邻六环数据构建序列进行评估（严格与训练一致）
-            ring_number = data.get('RING')
-            if ring_number is None:
-                raise RuntimeError("缺少环号，无法构建六环序列进行结泥饼风险评估")
-            try:
-                ring_number = float(ring_number)
-                multi_ring_data = query_consecutive_ring_data(ring_number, count=6)
-            except Exception:
-                raise RuntimeError("环号解析或相邻环数据查询失败，无法进行序列评估")
-
-            seq_result = self.assess_mud_cake_risk_sequence(multi_ring_data)
-            # 取最后一环的最后一个点作为参数值来源（若不存在则回退到传入单点）
-            last_point = multi_ring_data[-1] if isinstance(multi_ring_data, list) and multi_ring_data else {}
-            param_values = {
-                "DP_SD": last_point.get('DP_SD', data.get('DP_SD', 0)),
-                "DP_ZJ": last_point.get('DP_ZJ', data.get('DP_ZJ', 0)),
-                "TJSD": last_point.get('TJSD', data.get('TJSD', 0)),
-                "TJL": last_point.get('TJL', data.get('TJL', 0)),
-                "DP_SS_ZTL": last_point.get('DP_SS_ZTL', data.get('DP_SS_ZTL', 0))
-            }
-            return {
-                **seq_result,
-                "impact_parameters": ["刀盘转速", "刀盘扭矩", "总推力", "推进速度"],
-                "param_values": param_values,
-                "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低"
-            }
-        except Exception as e:
-            raise
+    # 移除未使用的 assess_mud_cake_risk（统一在序列中评估结泥饼）
 
     def assess_clog_risk(self, data):
         try:
@@ -909,13 +877,28 @@ def get_risk_level():
                 }
                 try:
                     if earliest_params:
-                        risk_out["warning_parameters"] = {mud_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        wp_raw = {mud_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        mud_units = {
+                            "刀盘转速": "rpm",
+                            "刀盘扭矩": "kNm",
+                            "推进速度": "mm/min",
+                            "总推力": "kN",
+                            "刀盘伸缩总推力": "kN",
+                        }
+                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, mud_units)
                     else:
                         risk_out["warning_parameters"] = "-"
                 except Exception:
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
+                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], {
+                    "刀盘转速": "rpm",
+                    "刀盘扭矩": "kNm",
+                    "推进速度": "mm/min",
+                    "总推力": "kN",
+                    "刀盘伸缩总推力": "kN",
+                })
 
                 result["mud_cake_risk"] = risk_out
 
@@ -993,13 +976,25 @@ def get_risk_level():
                 }
                 try:
                     if earliest_params:
-                        risk_out["warning_parameters"] = {clog_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        wp_raw = {clog_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        clog_units = {
+                            "工作仓压力1#": "bar",
+                            "开挖仓压力4": "bar",
+                            "排浆泵P2.1进泥口压力检测": "bar",
+                        }
+                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, clog_units)
                     else:
                         risk_out["warning_parameters"] = "-"
                 except Exception:
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
+                clog_units = {
+                    "工作仓压力1#": "bar",
+                    "开挖仓压力4": "bar",
+                    "排浆泵P2.1进泥口压力检测": "bar",
+                }
+                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], clog_units)
 
                 result["clog_risk"] = risk_out
 
@@ -1083,13 +1078,29 @@ def get_risk_level():
                 }
                 try:
                     if earliest_params:
-                        risk_out["warning_parameters"] = {mdr_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        wp_raw = {mdr_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        mdr_units = {
+                            "工作仓压力1#": "bar",
+                            "油气密封反馈压力": "bar",
+                            "1#主驱动伸缩密封油脂压力": "bar",
+                            "齿轮油油气密封压力": "bar",
+                            "油气密封泄露检测腔压力": "bar",
+                        }
+                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, mdr_units)
                     else:
                         risk_out["warning_parameters"] = "-"
                 except Exception:
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
+                mdr_units = {
+                    "工作仓压力1#": "bar",
+                    "油气密封反馈压力": "bar",
+                    "1#主驱动伸缩密封油脂压力": "bar",
+                    "齿轮油油气密封压力": "bar",
+                    "油气密封泄露检测腔压力": "bar",
+                }
+                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], mdr_units)
 
             elif risk_type == "盾尾密封失效风险":
                 risk_type_mapped = "盾尾密封失效"
@@ -1164,13 +1175,27 @@ def get_risk_level():
                 # tail_fields 和 tail_map 已在上方定义
                 try:
                     if earliest_params:
-                        risk_out["warning_parameters"] = {tail_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        wp_raw = {tail_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        tail_units = {
+                            "1#A液泵出口压力": "bar",
+                            "2#A液泵出口压力": "bar",
+                            "盾尾密封压力4.2": "bar",
+                            "盾尾密封压力4.4": "bar",
+                        }
+                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, tail_units)
                     else:
                         risk_out["warning_parameters"] = "-"
                 except Exception:
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
+                tail_units = {
+                    "1#A液泵出口压力": "bar",
+                    "2#A液泵出口压力": "bar",
+                    "盾尾密封压力4.2": "bar",
+                    "盾尾密封压力4.4": "bar",
+                }
+                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], tail_units)
                 result["tail_seal_risk"] = risk_out
         return jsonify(result)
     except Exception as e:
@@ -1459,17 +1484,7 @@ def get_latest_risk_level():
             except Exception:
                 return val
 
-        def _dash(val):
-            try:
-                if val is None:
-                    return "-"
-                if isinstance(val, str):
-                    s = val.strip()
-                    if s == "" or s.lower() in ("null", "none"):
-                        return "-"
-                return val
-            except Exception:
-                return val
+        # 使用全局 _dash
 
         def build_risk_out(row, meta):
             safety = row.get("safety_level")
@@ -1542,7 +1557,7 @@ def get_latest_risk_level():
             row = rows.get(rp)
             if meta and row:
                 risk_out = build_risk_out(row, meta)
-                result[meta["result_key"]] = risk_out
+                return jsonify(risk_out)
         else:
             for label, meta in meta_map.items():
                 row = rows.get(label)
@@ -1628,6 +1643,38 @@ def _rename_keys(items, mapping):
         return renamed
     except Exception:
         return items
+
+def _with_value_and_unit(items, unit_map):
+    try:
+        out = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                out.append(it)
+                continue
+            ni = {}
+            for k, v in it.items():
+                if k == "time":
+                    ni["time"] = v
+                else:
+                    u = unit_map.get(k, "-")
+                    ni[k] = {"value": v, "unit": u}
+            out.append(ni)
+        return out
+    except Exception:
+        return items
+
+def _append_units_to_map(data_map, units_map):
+    try:
+        out = {}
+        for k, v in (data_map or {}).items():
+            u = units_map.get(k, "")
+            if v is None or (isinstance(v, str) and v.strip() in ("", "null", "none", "-")):
+                out[k] = "-"
+            else:
+                out[k] = f"{v}{u}" if u else str(v)
+        return out
+    except Exception:
+        return data_map
 
 
 @bp.route('/getAllRiskRecords', methods=['GET'])
