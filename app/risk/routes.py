@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import pymysql
 import threading
 import queue
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 CONSECUTIVE_TRIGGER_N = int(os.environ.get('CONSECUTIVE_TRIGGER_N', '3'))
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "通苏嘉甬")
@@ -30,6 +31,8 @@ client = InfluxDBClient(
     database=INFLUXDB_DATABASE,
     timeout=INFLUXDB_TIMEOUT
 )
+
+POINT_MAP_CACHE = {}
 
 
 class RiskAssessor:
@@ -269,8 +272,6 @@ class RiskAssessor:
             else:
                 return 4.0 - probability * 0.5 / 0.3
 
-    # 移除未使用的 assess_mud_cake_risk（统一在序列中评估结泥饼）
-
     def assess_clog_risk(self, data):
         try:
             result = calculate_clog_risk(data)
@@ -356,11 +357,6 @@ def _to_local_dt(time_str: str):
     Also supports datetime and pandas.Timestamp objects.
     """
     # 支持 datetime/pandas.Timestamp
-    try:
-        import pandas as pd  # already imported at top
-    except Exception:
-        pd = None
-
     if isinstance(time_str, datetime):
         dt = time_str
         try:
@@ -974,14 +970,14 @@ def get_risk_level():
                     "KWC_PRS4": "开挖仓压力4",
                     "PJB_JNK_PRS2.1": "排浆泵P2.1进泥口压力检测",
                 }
+                clog_units = {
+                    "工作仓压力1#": "bar",
+                    "开挖仓压力4": "bar",
+                    "排浆泵P2.1进泥口压力检测": "bar",
+                }
                 try:
                     if earliest_params:
                         wp_raw = {clog_map.get(k, k): earliest_params.get(k) for k in earliest_params}
-                        clog_units = {
-                            "工作仓压力1#": "bar",
-                            "开挖仓压力4": "bar",
-                            "排浆泵P2.1进泥口压力检测": "bar",
-                        }
                         risk_out["warning_parameters"] = _append_units_to_map(wp_raw, clog_units)
                     else:
                         risk_out["warning_parameters"] = "-"
@@ -989,11 +985,6 @@ def get_risk_level():
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, clog_fields, count=6, preload=preload_map), clog_map)
-                clog_units = {
-                    "工作仓压力1#": "bar",
-                    "开挖仓压力4": "bar",
-                    "排浆泵P2.1进泥口压力检测": "bar",
-                }
                 risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], clog_units)
 
                 result["clog_risk"] = risk_out
@@ -1076,23 +1067,6 @@ def get_risk_level():
                     "CLY_YQ_PRS": "齿轮油油气密封压力",
                     "YQMF_XLJC_QPRS": "油气密封泄露检测腔压力",
                 }
-                try:
-                    if earliest_params:
-                        wp_raw = {mdr_map.get(k, k): earliest_params.get(k) for k in earliest_params}
-                        mdr_units = {
-                            "工作仓压力1#": "bar",
-                            "油气密封反馈压力": "bar",
-                            "1#主驱动伸缩密封油脂压力": "bar",
-                            "齿轮油油气密封压力": "bar",
-                            "油气密封泄露检测腔压力": "bar",
-                        }
-                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, mdr_units)
-                    else:
-                        risk_out["warning_parameters"] = "-"
-                except Exception:
-                    pass
-                risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
                 mdr_units = {
                     "工作仓压力1#": "bar",
                     "油气密封反馈压力": "bar",
@@ -1100,6 +1074,16 @@ def get_risk_level():
                     "齿轮油油气密封压力": "bar",
                     "油气密封泄露检测腔压力": "bar",
                 }
+                try:
+                    if earliest_params:
+                        wp_raw = {mdr_map.get(k, k): earliest_params.get(k) for k in earliest_params}
+                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, mdr_units)
+                    else:
+                        risk_out["warning_parameters"] = "-"
+                except Exception:
+                    pass
+                risk_out["key_parameters"] = _rename_keys(
+                    collect_key_parameters(ring_number, mdr_fields, count=6, preload=preload_map), mdr_map)
                 risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], mdr_units)
 
             elif risk_type == "盾尾密封失效风险":
@@ -1173,15 +1157,15 @@ def get_risk_level():
                     if earliest_time_raw and earliest_time_raw != "-" else "-"
                 )
                 # tail_fields 和 tail_map 已在上方定义
+                tail_units = {
+                    "1#A液泵出口压力": "bar",
+                    "2#A液泵出口压力": "bar",
+                    "盾尾密封压力4.2": "bar",
+                    "盾尾密封压力4.4": "bar",
+                }
                 try:
                     if earliest_params:
                         wp_raw = {tail_map.get(k, k): earliest_params.get(k) for k in earliest_params}
-                        tail_units = {
-                            "1#A液泵出口压力": "bar",
-                            "2#A液泵出口压力": "bar",
-                            "盾尾密封压力4.2": "bar",
-                            "盾尾密封压力4.4": "bar",
-                        }
                         risk_out["warning_parameters"] = _append_units_to_map(wp_raw, tail_units)
                     else:
                         risk_out["warning_parameters"] = "-"
@@ -1189,12 +1173,6 @@ def get_risk_level():
                     pass
                 risk_out["key_parameters"] = _rename_keys(
                     collect_key_parameters(ring_number, tail_fields, count=6, preload=preload_map), tail_map)
-                tail_units = {
-                    "1#A液泵出口压力": "bar",
-                    "2#A液泵出口压力": "bar",
-                    "盾尾密封压力4.2": "bar",
-                    "盾尾密封压力4.4": "bar",
-                }
                 risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], tail_units)
                 result["tail_seal_risk"] = risk_out
         return jsonify(result)
@@ -1781,3 +1759,217 @@ def get_all_risk_records():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "error": f"获取全部风险记录时发生错误: {str(e)}"}), 500
+
+
+def _get_point_info_connection():
+    return pymysql.connect(
+        host="192.168.211.104",
+        port=6446,
+        user="root",
+        password="7m@9X!zP2qA5LbNcRfTgYhJkM3nD4v6B",
+        database="point_info",
+        charset="utf8",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=10,
+    )
+
+
+@bp.route('/history/parameters', methods=['GET'])
+def get_available_parameters():
+    try:
+        shieldid = request.args.get("shieldid")
+        if not shieldid:
+            data = request.get_json(silent=True) or {}
+            shieldid = data.get("shieldid")
+        if not shieldid:
+            return jsonify({"error": "Missing required parameters"}), 400
+        prefix = shieldid
+            
+        table_name = "point_info_tsjy_dz1360" if prefix == "tsjy_dz1360" else f"point_info_{prefix}"
+        
+        try:
+            conn = _get_point_info_connection()
+
+            with conn:
+                with conn.cursor() as cur:
+                    # Query parameters where point_code, point_cn_name, and point_unit are all valid
+                    query = f"SELECT point_cn_name, point_code, point_unit FROM `{table_name}` WHERE point_unit IS NOT NULL AND point_unit != '' AND point_code IS NOT NULL AND point_code != '' AND point_cn_name IS NOT NULL AND point_cn_name != ''"
+                    cur.execute(query)
+                    rows = cur.fetchall()
+                    
+                    result = []
+                    for row in rows:
+                        result.append({
+                            "name": row['point_cn_name'],
+                            "code": row['point_code'],
+                            "unit": row['point_unit']
+                        })
+                    return jsonify(result)
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({"status": "error", "error": f"MySQL Query Error: {str(e)}"}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@bp.route('/history/query', methods=['GET'])
+def query_history_data():
+    try:
+        start_date_str = None
+        end_date_str = None
+        parameters = []
+        project_name = "tsjy_dz1360_clean"
+        start_date_str = request.args.get("start_date")
+        end_date_str = request.args.get("end_date")
+        project_name = request.args.get("project_name", project_name)
+        
+        params_raw = request.args.get("parameters", "")
+        if params_raw:
+            params_raw = params_raw.strip()
+            # Handle list format in query string
+            if params_raw.startswith("[") and params_raw.endswith("]"):
+                try:
+                    parameters = json.loads(params_raw)
+                except Exception:
+                    parameters = [p.strip() for p in params_raw.strip("[]").split(",") if p.strip()]
+            else:
+                parameters = [p.strip() for p in params_raw.split(",") if p.strip()]
+        
+        # 2. Fallback: Check if body contains JSON (even in GET, some clients/Postman might do this)
+        if not start_date_str and not end_date_str:
+            data = request.get_json(silent=True) or {}
+            if data:
+                start_date_str = data.get("start_date")
+                end_date_str = data.get("end_date")
+                parameters = data.get("parameters") or parameters
+                project_name = data.get("project_name", project_name)
+
+        if not start_date_str or not end_date_str:
+            return jsonify({"status": "error", "error": "Missing 'start_date' or 'end_date' parameter"}), 400
+        
+        if not parameters:
+            return jsonify({"status": "error", "error": "Missing 'parameters' parameter"}), 400
+            
+        if not (1 <= len(parameters) <= 4):
+            return jsonify({"status": "error", "error": "The number of parameters must be between 1 and 4"}), 400
+
+        try:
+            start_dt_local = pd.to_datetime(start_date_str).tz_localize('Asia/Shanghai')
+            end_dt_local = pd.to_datetime(end_date_str).tz_localize('Asia/Shanghai') + timedelta(days=1)
+            
+            if start_dt_local >= end_dt_local:
+                return jsonify({"status": "error", "error": "start_date cannot be later than end_date"}), 400
+            
+            start_dt_utc = start_dt_local.tz_convert('UTC')
+            end_dt_utc = end_dt_local.tz_convert('UTC')
+            
+            if project_name == "tsjy_dz1360_clean":
+                prefix = "tsjy_dz1360"
+            else:
+                prefix = project_name.replace("_clean", "")
+                
+        except ValueError:
+            return jsonify({"status": "error", "error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        point_mapping = {}
+        
+        table_name = "point_info_tsjy_dz1360" if prefix == "tsjy_dz1360" else f"point_info_{prefix}"
+
+        cache_key = (table_name, tuple(parameters))
+        try:
+            if cache_key in POINT_MAP_CACHE:
+                point_mapping = POINT_MAP_CACHE.get(cache_key, {})
+            else:
+                conn = _get_point_info_connection()
+                with conn:
+                    with conn.cursor() as cur:
+                        format_strings = ','.join(['%s'] * len(parameters))
+                        query = f"SELECT point_code, point_cn_name, point_unit FROM `{table_name}` WHERE point_cn_name IN ({format_strings})"
+                        cur.execute(query, tuple(parameters))
+                        rows = cur.fetchall()
+                        for row in rows:
+                            point_mapping[row['point_cn_name']] = {
+                                'code': row['point_code'],
+                                'unit': row['point_unit']
+                            }
+                POINT_MAP_CACHE[cache_key] = point_mapping
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({"status": "error", "error": f"MySQL Query Error: {str(e)}"}), 500
+
+        if not point_mapping:
+            return jsonify({"status": "error", "error": "No matching parameters found in database"}), 404
+
+        fields = []
+        for p in parameters:
+            if p in point_mapping:
+                fields.append(f'"{point_mapping[p]["code"]}"')
+        
+        if not fields:
+            return jsonify({"status": "error", "error": "No valid fields to query"}), 400
+
+        select_clause = ", ".join(fields)
+        
+        time_filter = f"time >= '{start_dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}' AND time < '{end_dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}'"
+        
+        all_points = []
+        curr_date = start_dt_local.date() - timedelta(days=1)
+        target_end_date = end_dt_local.date() + timedelta(days=1)
+        
+        measurement_names = []
+        seen_tables = set()
+        while curr_date < target_end_date:
+            tn = f"{prefix}_DZ1360_{curr_date.strftime('%Y_%m_%d')}"
+            if tn not in seen_tables:
+                seen_tables.add(tn)
+                measurement_names.append(tn)
+            curr_date += timedelta(days=1)
+        def _q(measurement_name):
+            q = f'SELECT {select_clause} FROM "{measurement_name}" WHERE {time_filter}'
+            try:
+                res = client.query(q, database=project_name, chunked=True, epoch='ms')
+                pts = list(res.get_points())
+                return pts
+            except Exception:
+                return []
+        with ThreadPoolExecutor(max_workers=min(8, len(measurement_names) or 1)) as ex:
+            futs = [ex.submit(_q, m) for m in measurement_names]
+            for f in as_completed(futs):
+                pts = f.result() or []
+                if pts:
+                    all_points.extend(pts)
+            
+        all_points.sort(key=lambda x: x.get('time', ''))
+        
+        output_data = []
+        for pt in all_points:
+            item = {}
+            ts = pt.get('time')
+            try:
+                if isinstance(ts, (int, float)):
+                    t_obj = datetime.utcfromtimestamp(ts / 1000) + timedelta(hours=8)
+                    item["time"] = t_obj.strftime("%Y/%m/%d %H:%M:%S")
+                else:
+                    t_obj = pd.to_datetime(ts, utc=True).tz_convert('Asia/Shanghai')
+                    item["time"] = t_obj.strftime("%Y/%m/%d %H:%M:%S")
+            except Exception:
+                item["time"] = ts
+
+            for chinese_name in parameters:
+                info = point_mapping.get(chinese_name)
+                if info:
+                    code = info['code']
+                    unit = info['unit']
+                    val = pt.get(code)
+                    item[chinese_name] = {
+                        "value": val if val is not None else 0.0,
+                        "unit": unit if unit else ""
+                    }
+            output_data.append(item)
+
+        return jsonify(output_data)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
