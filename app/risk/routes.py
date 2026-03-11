@@ -446,65 +446,35 @@ class RiskAssessor:
         else:
             return 0.5, 0.3
 
-    def assess_clog_risk(self, data):
+    def _assess_generic(self, data, calc_func, risk_type, fault_cause):
+        """通用风险评估逻辑。"""
         try:
-            result = calculate_clog_risk(data)
+            result = calc_func(data)
             probability = result.get('probability', 0)
-            mapped_score = self.map_probability_to_score(probability, "滞排风险")
-            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, "滞排风险")
+            mapped_score = self.map_probability_to_score(probability, risk_type)
+            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
             return {
-                "risk_type": "滞排风险",
+                "risk_type": risk_type,
                 "risk_level": risk_level,
                 "risk_score": round(mapped_score, 2),
                 "probability": round(probability, 3),
                 "measures": measures,
                 "reason": reason,
                 "potential_risk": potential_risk,
-                "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
+                "fault_cause": fault_cause,
             }
         except Exception as e:
             raise
 
+    def assess_clog_risk(self, data):
+        return self._assess_generic(data, calculate_clog_risk, "滞排风险", "渣土改良不充分导致流动性不佳，最终在管道内发生滞排")
+
     def assess_mdr_seal_risk(self, data):
-        try:
-            result = calculate_mdr_seal_risk(data)
-            probability = result.get('probability', 0)
-            mapped_score = self.map_probability_to_score(probability, "主驱动密封失效风险")
-            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score,
-                                                                                             "主驱动密封失效风险")
-            return {
-                "risk_type": "主驱动密封失效风险",
-                "risk_level": risk_level,
-                "risk_score": round(mapped_score, 2),
-                "probability": round(probability, 3),
-                "measures": measures,
-                "reason": reason,
-                "potential_risk": potential_risk,
-                "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-            }
-        except Exception as e:
-            raise
+        return self._assess_generic(data, calculate_mdr_seal_risk, "主驱动密封失效风险", "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入")
 
     def assess_tail_seal_risk(self, data):
         """评估盾尾密封失效风险"""
-        try:
-            result = calculate_tail_seal_risk(data)
-            probability = result.get('probability', 0)
-            mapped_score = self.map_probability_to_score(probability, "盾尾密封失效风险")
-            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score,
-                                                                                             "盾尾密封失效风险")
-            return {
-                "risk_type": "盾尾密封失效风险",
-                "risk_level": risk_level,
-                "risk_score": round(mapped_score, 2),
-                "probability": round(probability, 3),
-                "measures": measures,
-                "reason": reason,
-                "potential_risk": potential_risk,
-                "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-            }
-        except Exception as e:
-            raise
+        return self._assess_generic(data, calculate_tail_seal_risk, "盾尾密封失效风险", "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力")
 
     def assess_all_risks(self, data_point):
         """评估所有风险（结泥饼在环序列中统一评估，不在单点评估）"""
@@ -513,6 +483,57 @@ class RiskAssessor:
             self.assess_mdr_seal_risk(data_point),
             self.assess_tail_seal_risk(data_point)
         ]
+
+
+def _clean_json_val(val, dash_if_empty=True):
+    """统一清理和解析 JSON 字符串、处理空值。"""
+    try:
+        if val is None:
+            return "-" if dash_if_empty else None
+        
+        if isinstance(val, (list, dict)):
+            # 如果已经是对象，则递归清理其中的元素或直接返回
+            if isinstance(val, list):
+                return "，".join([str(_clean_json_val(x, False)) for x in val])
+            return val
+            
+        if isinstance(val, str):
+            s = val.strip()
+            if s == "" or s.lower() in ("null", "none"):
+                return "-" if dash_if_empty else None
+            
+            # 处理 JSON 编码的字符串 (e.g., "\"text\"", "[1,2,3]", "{\"a\":1}")
+            if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")) or \
+               s.startswith("[") or s.startswith("{"):
+                try:
+                    d = json.loads(s)
+                    return _clean_json_val(d, dash_if_empty)
+                except Exception:
+                    # 如果解析失败，去掉引号或原样返回
+                    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                        return s[1:-1]
+                    return s
+            return s
+            
+        return str(val)
+    except Exception:
+        return "-" if dash_if_empty else str(val)
+
+
+def _to_plain_string(v):
+    return _clean_json_val(v)
+
+
+def _dash(val):
+    return _clean_json_val(val)
+
+
+def _decode_json_string(val):
+    return _clean_json_val(val)
+
+
+def _parse_jsonish(val):
+    return _clean_json_val(val)
 
 
 risk_assessor = RiskAssessor()
@@ -984,40 +1005,73 @@ def get_risk_level():
             "mdr_seal_risk": {},
             "tail_seal_risk": {}
         }
-        def _to_plain_string(v):
-            try:
-                if isinstance(v, list):
-                    return "，".join([str(x) for x in v])
-                if isinstance(v, dict):
-                    return "，".join([str(k) for k in v.keys()])
-                if isinstance(v, str):
-                    s = v.strip()
-                    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-                        try:
-                            d = json.loads(s)
-                            if isinstance(d, (list, dict)):
-                                return _to_plain_string(d)
-                            return str(d)
-                        except Exception:
-                            return s[1:-1]
-                    if s.startswith("[") or s.startswith("{"):
-                        try:
-                            d = json.loads(s)
-                            return _to_plain_string(d)
-                        except Exception:
-                            return v
-                    return v
-                if v is None:
-                    return "-"
-                return str(v)
-            except Exception:
-                return "-" if v is None else str(v)
         ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
+        def _build_risk_item(risk_obj, risk_type_label, risk_config_key, assessor_func, fault_cause):
+            """通用风险输出构造辅助函数。"""
+            config = RISK_CONFIG[risk_config_key]
+            
+            # 处理措施
+            fm = risk_obj.get("measures")
+            fm = _clean_json_val(fm)
+            
+            # 处理影响参数
+            imp = "，".join([config["map"].get(k, k) for k in config["fields"]])
+            
+            risk_out = {
+                "risk_type": risk_type_label,
+                "ring": int(result["ring"]),
+                "project_name": PROJECT_NAME,
+                "fault_measures": fm,
+                "fault_reason": risk_obj.get("reason"),
+                "fault_reason_analysis": get_fault_reason_analysis(risk_type_label, risk_obj["risk_level"]),
+                "fault_cause": fault_cause,
+                "impact_parameters": imp,
+                "safety_level": risk_obj["risk_level"],
+                "risk_level": map_safety_to_level(risk_obj["risk_level"]),
+                "risk_score": round(risk_obj["risk_score"], 2),
+                "probability": round(risk_obj["probability"], 2),
+                "potential_risk": risk_obj["potential_risk"],
+                "warning_time": "-",
+                "warning_parameters": "-",
+            }
+
+            # 查找最早预警
+            earliest_time_raw, earliest_params = _find_earliest_warning(
+                original_ring_data, assessor_func, CONSECUTIVE_TRIGGER_N, config["fields"]
+            )
+
+            if earliest_params:
+                earliest_params = round_params(earliest_params)
+                
+            # 设置预警时间
+            if earliest_time_raw and earliest_time_raw != "-":
+                risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
+            elif original_ring_data:
+                # 备选使用该环第一条数据的时间
+                t0 = original_ring_data[0].get("time")
+                if t0:
+                    risk_out["warning_time"] = format_time_utc_to_shanghai(t0)
+
+            # 设置预警参数
+            if earliest_params:
+                wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in earliest_params}
+                risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
+            else:
+                risk_out["warning_parameters"] = "-"
+                
+            # 设置历史关键参数
+            risk_out["key_parameters"] = _rename_keys(
+                collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map), config["map"])
+            risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
+            
+            return risk_out
+
         for risk in risk_results:
             risk_type = risk['risk_type']
 
             if risk_type == "结泥饼风险":
                 risk_type_mapped = "结泥饼"
+                # 结泥饼逻辑略有特殊，仍保留部分特殊逻辑
                 try:
                     center_ring_int = int(float(ring_number))
                     present_rings = set()
@@ -1034,15 +1088,9 @@ def get_risk_level():
                     result["mud_cake_risk"] = _build_mud_cake_fallback_risk(ring_number, preload_map, multi_ring_data)
                     continue
 
-                fm = risk["measures"]
-                try:
-                    if isinstance(fm, list):
-                        fm = "，".join([str(x) for x in fm])
-                except Exception:
-                    pass
-                fm = _to_plain_string(fm)
+                fm = _clean_json_val(risk["measures"])
                 config = RISK_CONFIG["mud_cake_risk"]
-                imp = "，".join([config["map"][k] for k in config["fields"]])
+                imp = "，".join([config["map"].get(k, k) for k in config["fields"]])
                 risk_out = {
                     "risk_type": risk_type_mapped,
                     "ring": int(result["ring"]),
@@ -1060,239 +1108,40 @@ def get_risk_level():
                     "warning_time": "-",
                     "warning_parameters": "-",
                 }
-                try:
-                    if isinstance(original_ring_data, list) and len(original_ring_data) < 25:
-                        p0 = original_ring_data[0] if original_ring_data else None
-                        t0 = p0.get("time") if isinstance(p0, dict) else None
-                        risk_out["warning_time"] = format_time_utc_to_shanghai(t0) if t0 else risk_out["warning_time"]
-                except Exception:
-                    pass
-
+                
+                # 结泥饼的 warning_time 逻辑
                 earliest_time_raw = risk.get("earliest_time")
-                earliest_params = None
-                try:
-                    first_point = next(
-                        (p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
-                    if first_point:
-                        earliest_params = {
-                            "CutterHead.Spd": first_point.get("CutterHead.Spd"),
-                            "CutterHead.Torque": first_point.get("CutterHead.Torque"),
-                            "Prop.Spd": first_point.get("Prop.Spd"),
-                            "Thrust": first_point.get("Thrust"),
-                            "CutterHead.Total.Extr.Pres": first_point.get("CutterHead.Total.Extr.Pres")
-                        }
-                except Exception:
-                    earliest_params = None
-
-                if earliest_params:
-                    earliest_params = round_params(earliest_params)
                 final_level_text = risk.get("risk_level", "")
-                should_warn_time = final_level_text in ("低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ")
-                fallback_time = None
-                try:
-                    if isinstance(multi_ring_data, list):
-                        first_point = next(
-                            (p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
-                        if first_point:
-                            fallback_time = first_point.get("time")
-                except Exception:
-                    fallback_time = None
-                risk_out["warning_time"] = (
-                    format_time_utc_to_shanghai(earliest_time_raw)
-                    if should_warn_time and earliest_time_raw and earliest_time_raw != "-" else (
-                        format_time_utc_to_shanghai(fallback_time) if fallback_time else "-"
-                    )
-                )
+                should_warn = final_level_text in ("低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ")
+                
+                if should_warn and earliest_time_raw and earliest_time_raw != "-":
+                    risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
+                else:
+                    # 备选：当前环的第一条数据时间
+                    first_p = next((p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
+                    if first_p:
+                        risk_out["warning_time"] = format_time_utc_to_shanghai(first_p.get("time"))
 
-                config = RISK_CONFIG["mud_cake_risk"]
-                mud_fields = config["fields"]
-                mud_map = config["map"]
-                mud_units = config["units"]
-
-                try:
-                    if earliest_params:
-                        wp_raw = {mud_map.get(k, k): earliest_params.get(k) for k in earliest_params}
-                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, mud_units)
-                    else:
-                        risk_out["warning_parameters"] = "-"
-                except Exception:
-                    pass
+                # 结泥饼的 warning_parameters (取当前环第一条数据快照)
+                first_p = next((p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
+                if first_p:
+                    ep = {f: first_p.get(f) for f in config["fields"]}
+                    wp_raw = {config["map"].get(k, k): ep.get(k) for k in ep}
+                    risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
+                
                 risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, mud_fields, count=6, preload=preload_map), mud_map)
-                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], mud_units)
-
+                    collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map), config["map"])
+                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
                 result["mud_cake_risk"] = risk_out  
 
             elif risk_type == "滞排风险":
-                risk_type_mapped = "滞排"
-                config = RISK_CONFIG["clog_risk"]
-
-                fm = risk["measures"]
-                try:
-                    if isinstance(fm, list):
-                        fm = "，".join([str(x) for x in fm])
-                except Exception:
-                    pass
-                fm = _to_plain_string(fm)
-                imp = "，".join([config["map"][k] for k in config["fields"]])
-                risk_out = {
-                    "risk_type": risk_type_mapped,
-                    "ring": int(result["ring"]),
-                    "project_name": PROJECT_NAME,
-                    "fault_measures": fm,
-                    "fault_reason": risk["reason"],
-                    "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
-                    "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
-                    "impact_parameters": imp,
-                    "safety_level": risk["risk_level"],
-                    "risk_level": map_safety_to_level(risk["risk_level"]),
-                    "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"], 2),
-                    "potential_risk": risk["potential_risk"],
-                    "warning_time": "-",
-                    "warning_parameters": "-",
-                }
-
-                earliest_time_raw, earliest_params = _find_earliest_warning(
-                    original_ring_data, risk_assessor.assess_clog_risk, CONSECUTIVE_TRIGGER_N, config["fields"]
-                )
-
-                if earliest_params:
-                    earliest_params = round_params(earliest_params)
-                risk_out["warning_time"] = (
-                    format_time_utc_to_shanghai(earliest_time_raw)
-                    if earliest_time_raw and earliest_time_raw != "-" else (
-                        format_time_utc_to_shanghai(original_ring_data[0].get("time")) 
-                        if isinstance(original_ring_data, list) and len(original_ring_data) > 0 and original_ring_data[0].get("time") else "-"
-                    )
-                )
-
-                try:
-                    if earliest_params:
-                        wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in earliest_params}
-                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
-                    else:
-                        risk_out["warning_parameters"] = "-"
-                except Exception:
-                    pass
-                risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map), config["map"])
-                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
-
-                result["clog_risk"] = risk_out
+                result["clog_risk"] = _build_risk_item(risk, "滞排", "clog_risk", risk_assessor.assess_clog_risk, "渣土改良不充分导致流动性不佳，最终在管道内发生滞排")
 
             elif risk_type == "主驱动密封失效风险":
-                risk_type_mapped = "主驱动密封失效"
-                config = RISK_CONFIG["mdr_seal_risk"]
-
-                fm = risk["measures"]
-                try:
-                    if isinstance(fm, list):
-                        fm = "，".join([str(x) for x in fm])
-                except Exception:
-                    pass
-                fm = _to_plain_string(fm)
-                imp = "，".join([config["map"][k] for k in config["fields"]])
-                risk_out = {
-                    "risk_type": risk_type_mapped,
-                    "ring": int(result["ring"]),
-                    "project_name": PROJECT_NAME,
-                    "fault_measures": fm,
-                    "fault_reason": risk["reason"],
-                    "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
-                    "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-                    "impact_parameters": imp,
-                    "safety_level": risk["risk_level"],
-                    "risk_level": map_safety_to_level(risk["risk_level"]),
-                    "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"], 2),
-                    "potential_risk": risk["potential_risk"],
-                    "warning_time": "-",
-                    "warning_parameters": "-",
-                }
-
-                earliest_time_raw, earliest_params = _find_earliest_warning(
-                    original_ring_data, risk_assessor.assess_mdr_seal_risk, CONSECUTIVE_TRIGGER_N, config["fields"]
-                )
-
-                if earliest_params:
-                    earliest_params = round_params(earliest_params)
-                risk_out["warning_time"] = (
-                    format_time_utc_to_shanghai(earliest_time_raw)
-                    if earliest_time_raw and earliest_time_raw != "-" else (
-                        format_time_utc_to_shanghai(original_ring_data[0].get("time")) 
-                        if isinstance(original_ring_data, list) and len(original_ring_data) > 0 and original_ring_data[0].get("time") else "-"
-                    )
-                )
-                result["mdr_seal_risk"] = risk_out
-
-                try:
-                    if earliest_params:
-                        wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in earliest_params}
-                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
-                    else:
-                        risk_out["warning_parameters"] = "-"
-                except Exception:
-                    pass
-                risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map), config["map"])
-                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
+                result["mdr_seal_risk"] = _build_risk_item(risk, "主驱动密封失效", "mdr_seal_risk", risk_assessor.assess_mdr_seal_risk, "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入")
 
             elif risk_type == "盾尾密封失效风险":
-                risk_type_mapped = "盾尾密封失效"
-                config = RISK_CONFIG["tail_seal_risk"]
-
-                fm = risk["measures"]
-                try:
-                    if isinstance(fm, list):
-                        fm = "，".join([str(x) for x in fm])
-                except Exception:
-                    pass
-                fm = _to_plain_string(fm)
-                imp = "，".join([config["map"][k] for k in config["fields"]])
-                risk_out = {
-                    "risk_type": risk_type_mapped,
-                    "ring": int(result["ring"]),
-                    "project_name": PROJECT_NAME,
-                    "fault_measures": fm,
-                    "fault_reason": risk["reason"],
-                    "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
-                    "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-                    "impact_parameters": imp,
-                    "safety_level": risk["risk_level"],
-                    "risk_level": map_safety_to_level(risk["risk_level"]),
-                    "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"], 2),
-                    "potential_risk": risk["potential_risk"],
-                    "warning_time": "-",
-                    "warning_parameters": "-",
-                }
-                earliest_time_raw, earliest_params = _find_earliest_warning(
-                    original_ring_data, risk_assessor.assess_tail_seal_risk, CONSECUTIVE_TRIGGER_N, config["fields"]
-                )
-
-                if earliest_params:
-                    earliest_params = round_params(earliest_params)
-                risk_out["warning_time"] = (
-                    format_time_utc_to_shanghai(earliest_time_raw)
-                    if earliest_time_raw and earliest_time_raw != "-" else (
-                        format_time_utc_to_shanghai(original_ring_data[0].get("time")) 
-                        if isinstance(original_ring_data, list) and len(original_ring_data) > 0 and original_ring_data[0].get("time") else "-"
-                    )
-                )
-
-                try:
-                    if earliest_params:
-                        wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in earliest_params}
-                        risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
-                    else:
-                        risk_out["warning_parameters"] = "-"
-                except Exception:
-                    pass
-                risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map), config["map"])
-                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
-                result["tail_seal_risk"] = risk_out
+                result["tail_seal_risk"] = _build_risk_item(risk, "盾尾密封失效", "tail_seal_risk", risk_assessor.assess_tail_seal_risk, "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力")
 
         if not result.get("mud_cake_risk"):
             result["mud_cake_risk"] = _build_mud_cake_fallback_risk(ring_number, preload_map, multi_ring_data)
@@ -1422,6 +1271,7 @@ def _mysql_connect():
                 maxsize=maxsize,
             )
         raw = _MYSQL_POOL.acquire()
+        _set_session_timeout(raw)  # 每次获取连接时设置会话超时
         return _PooledConnection(_MYSQL_POOL, raw)
     except Exception as e:
         raise RuntimeError(f"MySQL连接失败: {e}")
@@ -1542,7 +1392,6 @@ def get_latest_risk_level():
             if not table:
                 return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
             with conn:
-                _set_session_timeout(conn)
                 row = _fetch_latest_row(conn, table)
                 if row:
                     rows[rp] = row
@@ -1556,7 +1405,6 @@ def get_latest_risk_level():
                 return jsonify({"status": "error", "error": "MySQL未找到指定风险的最新环数据"}), 404
         else:
             with conn:
-                _set_session_timeout(conn)
                 for k, t in RISK_TABLES.items():
                     row = _fetch_latest_row(conn, t)
                     if row:
@@ -1588,30 +1436,7 @@ def get_latest_risk_level():
             except Exception:
                 return "-"
 
-        def _parse_jsonish(val):
-            try:
-                if isinstance(val, str):
-                    s = val.strip()
-                    if s.startswith("[") or s.startswith("{"):
-                        try:
-                            return json.loads(s)
-                        except Exception:
-                            return val
-                    # 解析被JSON编码的纯字符串（例如 "\"文本\""）
-                    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-                        try:
-                            return json.loads(s)
-                        except Exception:
-                            return s[1:-1]
-                    if s == "" or s.lower() in ("null", "none"):
-                        return "-"
-                if val is None:
-                    return "-"
-                return val
-            except Exception:
-                return val
-
-        # 使用全局 _dash
+        # 使用全局 _clean_json_val 代替内嵌逻辑
 
         def build_risk_out(row, meta):
             safety = row.get("safety_level")
@@ -1624,14 +1449,13 @@ def get_latest_risk_level():
                 ring_num = _dash(ring_val)
 
             fm = _get_any(row, ["fault_measures", "measures"])
-            fm = _decode_json_string(fm)
+            fm = _clean_json_val(fm)
 
             ip = row.get("impact_parameters")
-            ip = _decode_json_string(ip)
+            ip = _clean_json_val(ip)
 
             kp = row.get("key_parameters")
-            kp = _parse_jsonish(kp)
-            kp = kp if kp not in (None, "") else "-"
+            kp = _clean_json_val(kp, dash_if_empty=True)
 
             return {
                 "risk_type": meta["risk_type"],
@@ -1702,7 +1526,6 @@ def get_latest_risk_level_simple():
         result = {}
         
         with conn:
-            _set_session_timeout(conn)
             for k, t in RISK_TABLES.items():
                 # k 是中文风险类型 (例如 "滞排")
                 # t 是对应的表名
@@ -1762,37 +1585,6 @@ def query_consecutive_ring_data(center_ring, count=6):
         return unique_points
     except Exception:
         return []
-
-
-def _dash(val):
-    try:
-        if val is None:
-            return "-"
-        if isinstance(val, str):
-            s = val.strip()
-            if s == "" or s.lower() in ("null", "none"):
-                return "-"
-        return val
-    except Exception:
-        return val
-
-
-def _decode_json_string(val):
-    try:
-        if isinstance(val, str):
-            s = val.strip()
-            if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-                try:
-                    return json.loads(s)
-                except Exception:
-                    return s[1:-1]
-            if s == "" or s.lower() in ("null", "none"):
-                return "-"
-        if val is None:
-            return "-"
-        return val
-    except Exception:
-        return val
 
 
 def _rename_keys(items, mapping):
@@ -1877,7 +1669,6 @@ def get_all_risk_records():
         mid_count = 0
         low_count = 0
         with conn:
-            _set_session_timeout(conn)
             with conn.cursor() as cur:
                 for label, table in loop_items:
                     try:
@@ -1906,20 +1697,10 @@ def get_all_risk_records():
                             ring_num = int(float(ring_val)) if ring_val is not None else "-"
                         except Exception:
                             ring_num = _dash(ring_val)
-                        wp = row.get("warning_parameters")
-                        try:
-                            if isinstance(wp, str) and (wp.strip().startswith("[") or wp.strip().startswith("{")):
-                                wp = json.loads(wp)
-                        except Exception:
-                            pass
-                        if wp is None or (
-                                isinstance(wp, str) and (wp.strip() == "" or wp.strip().lower() in ("null", "none"))):
-                            wp = "-"
-                        fm = row.get("fault_measures")
-                        fm = _decode_json_string(fm)
-                        if fm is None or (
-                                isinstance(fm, str) and (fm.strip() == "" or fm.strip().lower() in ("null", "none"))):
-                            fm = "-"
+                        
+                        wp = _clean_json_val(row.get("warning_parameters"))
+                        fm = _clean_json_val(row.get("fault_measures"))
+                        
                         level_raw = row.get("risk_level")
                         if not _is_target_level(level_raw):
                             continue
@@ -2519,22 +2300,7 @@ def get_latest_state():
             
             # 时间格式转换
             if time_val != "-":
-                try:
-                    # InfluxDB time format: 2026-02-05T12:17:10.009000Z
-                    # Handle potential varying precision or missing Z
-                    clean_time = time_val.replace("Z", "")
-                    # Try with microseconds
-                    if "." in clean_time:
-                        dt_utc = datetime.strptime(clean_time, "%Y-%m-%dT%H:%M:%S.%f")
-                    else:
-                        dt_utc = datetime.strptime(clean_time, "%Y-%m-%dT%H:%M:%S")
-                    
-                    # Convert UTC to Asia/Shanghai (UTC+8)
-                    dt_shanghai = dt_utc + timedelta(hours=8)
-                    time_val = dt_shanghai.strftime("%Y/%m/%d %H:%M:%S")
-                except Exception:
-                    # Keep original if parsing fails
-                    pass
+                time_val = format_time_utc_to_shanghai(time_val)
 
             return jsonify({
                 "state": state_val,
