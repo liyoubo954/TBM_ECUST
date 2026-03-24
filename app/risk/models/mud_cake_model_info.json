@@ -1,0 +1,51 @@
+{
+  "config": {
+    "sequence_length": 6,
+    "feature_weights": {
+      "TJSD": 1.5,
+      "DP_SS_ZTL": 1.5,
+      "TJL": 1.5,
+      "DP_SD": 0.7,
+      "DP_ZJ": 0.7
+    },
+    "risk_fusion": {
+      "ae_weight": 0.35,
+      "if_weight": 0.65
+    },
+    "data_processing": {
+      "sampling_ratio": 1.0,
+      "random_seed": 42,
+      "val_ratio": 0.2,
+      "rings_per_sequence": 6,
+      "window_points": 48,
+      "window_stride": 8,
+      "clip_zscore": 3.5,
+      "smoothing_window": 5
+    },
+    "autoencoder_params": {
+      "hidden_size": 16,
+      "num_layers": 1,
+      "dropout": 0.2,
+      "learning_rate": 0.0005,
+      "batch_size": 32,
+      "epochs": 30,
+      "patience": 8,
+      "l2": 1e-05
+    },
+    "isolation_forest_params": {
+      "contamination": 0.04,
+      "random_state": 42,
+      "n_estimators": 100,
+      "max_fit_samples": 50000,
+      "use_interactions": true
+    }
+  },
+  "features": [
+    "TJL",
+    "TJSD",
+    "DP_SD",
+    "DP_ZJ",
+    "DP_SS_ZTL"
+  ],
+  "feature_dim": 240
+}
