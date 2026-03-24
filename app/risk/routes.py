@@ -661,6 +661,57 @@ def query_ring_data(ring_number, measurement=None):
         return None
 
 
+def query_ring_range_data(start_ring_inclusive, end_ring_exclusive, measurement=None, fields=None):
+    try:
+        m = measurement or INFLUXDB_MEASUREMENT
+        start_int = int(float(start_ring_inclusive))
+        end_int = int(float(end_ring_exclusive))
+
+        if fields and isinstance(fields, (list, tuple)):
+            safe_fields = []
+            for f in fields:
+                if isinstance(f, str) and f.strip():
+                    safe_fields.append(f.strip())
+            select_clause = ", ".join([f"\"{f}\"" for f in safe_fields]) if safe_fields else "*"
+        else:
+            select_clause = "*"
+
+        q = f"""
+        SELECT {select_clause} FROM "{m}"
+        WHERE "Ring.No" >= {start_int} AND "Ring.No" < {end_int}
+        ORDER BY time ASC
+        """
+        res = client.query(q)
+        points = list(res.get_points()) if res is not None else []
+        if not points:
+            return []
+        seen = set()
+        unique_points = []
+        for p in points:
+            t = p.get('time')
+            if t not in seen:
+                seen.add(t)
+                unique_points.append(p)
+        unique_points.sort(key=lambda x: x.get('time'))
+        return unique_points
+    except Exception:
+        return []
+
+
+def _group_points_by_ring(points):
+    ring_map = {}
+    for p in points or []:
+        if not isinstance(p, dict):
+            continue
+        r = p.get("Ring.No", p.get("RING"))
+        try:
+            ring_int = int(float(r))
+        except Exception:
+            continue
+        ring_map.setdefault(ring_int, []).append(p)
+    return ring_map
+
+
 def collect_key_parameters(center_ring, fields, count=6, preload=None, measurement=None):
     fields_list = list(fields or [])
 
@@ -778,36 +829,41 @@ def get_risk_level():
         shield_id = data.get('shield_id')
         measurement, project_name_request = _resolve_shield_context(shield_id)
 
-        ring_data = query_ring_data(ring_number, measurement=measurement)
-        if not ring_data:
+        center_int = int(float(ring_number))
+        start_ring = center_int - 5
+        required_fields = set()
+        try:
+            for cfg in RISK_CONFIG.values():
+                for f in cfg.get("fields", []) or []:
+                    required_fields.add(f)
+            required_fields.add("state")
+            required_fields.add("Ring.No")
+        except Exception:
+            pass
+
+        multi_ring_data = query_ring_range_data(start_ring, center_int + 1, measurement=measurement, fields=sorted(required_fields))
+        if not multi_ring_data:
+            multi_ring_data = query_consecutive_ring_data(ring_number, count=6, measurement=measurement) or []
+
+        ring_points_map = _group_points_by_ring(multi_ring_data)
+        original_ring_data = ring_points_map.get(center_int) or []
+        if not original_ring_data:
+            ring_data = query_ring_data(ring_number, measurement=measurement)
+            original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
+
+        if not original_ring_data:
             return jsonify({
                 "status": "error",
                 "message": f"无法获取环号{ring_number}的数据",
                 "suggestion": "请检查环号是否正确或联系管理员"
             }), 404
 
-        original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
-        multi_ring_data = query_consecutive_ring_data(ring_number, count=6, measurement=measurement)
-        risk_results = aggregate_ring_risk_results(original_ring_data, current_ring_number=ring_number, multi_ring_data=multi_ring_data, measurement=measurement)
-
-        center_int = int(float(ring_number))
-        start_ring = center_int - 5
         preload_map = {}
-        rings = list(range(start_ring, center_int + 1))
+        for r in range(start_ring, center_int + 1):
+            preload_map[r] = ring_points_map.get(r) or []
         preload_map[center_int] = original_ring_data
-        rings_without_center = [r for r in rings if r != center_int]
-        if rings_without_center:
-            max_workers = min(len(rings_without_center), 6)
-            with ThreadPoolExecutor(max_workers=max_workers) as ex:
-                def _fetch(rr):
-                    return query_ring_data(rr, measurement=measurement)
-                future_to_ring = {ex.submit(_fetch, r): r for r in rings_without_center}
-                for fut in as_completed(future_to_ring):
-                    r = future_to_ring[fut]
-                    try:
-                        preload_map[r] = fut.result() or []
-                    except Exception:
-                        preload_map[r] = []
+
+        risk_results = aggregate_ring_risk_results(original_ring_data, current_ring_number=ring_number, multi_ring_data=multi_ring_data, measurement=measurement)
         result = {
             "ring": int(ring_number),
             "mud_cake_risk": {},
