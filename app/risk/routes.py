@@ -1125,7 +1125,7 @@ def _mysql_connect():
                 maxsize = 5
             _MYSQL_POOL = _MySQLConnectionPool(
                 host="192.168.211.104",
-                port=6446,
+                port=6447,
                 user="root",
                 password="7m@9X!zP2qA5LbNcRfTgYhJkM3nD4v6B",
                 database="algorithm",
@@ -1604,17 +1604,28 @@ def get_all_risk_records():
         return jsonify({"status": "error", "error": f"获取全部风险记录时发生错误: {str(e)}"}), 500
 
 
+_POINT_INFO_POOL = None
+
 def _get_point_info_connection():
-    return pymysql.connect(
-        host="172.16.105.12",
-        port=13366,
-        user="root",
-        password="123456",
-        database="point_info",
-        charset="utf8",
-        cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=10,
-    )
+    global _POINT_INFO_POOL
+    if _POINT_INFO_POOL is None:
+        size_env = os.environ.get("POINT_INFO_POOL_SIZE", "5")
+        try:
+            maxsize = int(size_env)
+        except Exception:
+            maxsize = 5
+        _POINT_INFO_POOL = _MySQLConnectionPool(
+            host="172.16.105.12",
+            port=13366,
+            user="root",
+            password="123456",
+            database="point_info",
+            charset="utf8",
+            cursorclass=pymysql.cursors.DictCursor,
+            maxsize=maxsize,
+        )
+    raw = _POINT_INFO_POOL.acquire()
+    return _PooledConnection(_POINT_INFO_POOL, raw)
 
 
 @bp.route('/history/parameters', methods=['GET'])
