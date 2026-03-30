@@ -5,8 +5,8 @@ UNIFIED_SEAL_SENSORS = [
     'ShieldTail.Seal.Rear.Pres.12', 'ShieldTail.Seal.Rear.Pres.15', 'ShieldTail.Seal.Rear.Pres.17', 'ShieldTail.Seal.Rear.Pres.19'
 ]
 UNIFIED_GROUT_SENSORS = [
-    'Liquid.Pump.A.In.Pres.01', 'Liquid.Pump.A.In.Pres.02', 'Liquid.Pump.A.In.Pres.03', 'Liquid.Pump.A.In.Pres.04',
-    'Liquid.Pump.A.In.Pres.05', 'Liquid.Pump.A.In.Pres.06', 'Liquid.Pump.A.In.Pres.07', 'Liquid.Pump.A.In.Pres.08'
+    'Liquid.Pump.A.OutPres.01', 'Liquid.Pump.A.OutPres.02', 'Liquid.Pump.A.OutPres.03', 'Liquid.Pump.A.OutPres.04',
+    'Liquid.Pump.A.OutPres.05', 'Liquid.Pump.A.OutPres.06', 'Liquid.Pump.A.OutPres.07', 'Liquid.Pump.A.OutPres.08'
 ]
 UNIFIED_PARAMS_CHINESE = {
     'ShieldTail.Seal.Rear.Pres.02': '盾尾密封后压力02',
@@ -17,14 +17,14 @@ UNIFIED_PARAMS_CHINESE = {
     'ShieldTail.Seal.Rear.Pres.15': '盾尾密封后压力15',
     'ShieldTail.Seal.Rear.Pres.17': '盾尾密封后压力17',
     'ShieldTail.Seal.Rear.Pres.19': '盾尾密封后压力19',
-    'Liquid.Pump.A.In.Pres.01': 'A液泵入口压力01',
-    'Liquid.Pump.A.In.Pres.02': 'A液泵入口压力02',
-    'Liquid.Pump.A.In.Pres.03': 'A液泵入口压力03',
-    'Liquid.Pump.A.In.Pres.04': 'A液泵入口压力04',
-    'Liquid.Pump.A.In.Pres.05': 'A液泵入口压力05',
-    'Liquid.Pump.A.In.Pres.06': 'A液泵入口压力06',
-    'Liquid.Pump.A.In.Pres.07': 'A液泵入口压力07',
-    'Liquid.Pump.A.In.Pres.08': 'A液泵入口压力08'
+    'Liquid.Pump.A.OutPres.01': 'A液泵出口压力01',
+    'Liquid.Pump.A.OutPres.02': 'A液泵出口压力02',
+    'Liquid.Pump.A.OutPres.03': 'A液泵出口压力03',
+    'Liquid.Pump.A.OutPres.04': 'A液泵出口压力04',
+    'Liquid.Pump.A.OutPres.05': 'A液泵出口压力05',
+    'Liquid.Pump.A.OutPres.06': 'A液泵出口压力06',
+    'Liquid.Pump.A.OutPres.07': 'A液泵出口压力07',
+    'Liquid.Pump.A.OutPres.08': 'A液泵出口压力08'
 }
 
 def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
@@ -128,8 +128,8 @@ def risk_metadata() -> Dict[str, Any]:
         "fields": [
             "ShieldTail.Seal.Rear.Pres.02", "ShieldTail.Seal.Rear.Pres.04", "ShieldTail.Seal.Rear.Pres.06", "ShieldTail.Seal.Rear.Pres.09",
             "ShieldTail.Seal.Rear.Pres.12", "ShieldTail.Seal.Rear.Pres.15", "ShieldTail.Seal.Rear.Pres.17", "ShieldTail.Seal.Rear.Pres.19",
-            "Liquid.Pump.A.In.Pres.01", "Liquid.Pump.A.In.Pres.02", "Liquid.Pump.A.In.Pres.03", "Liquid.Pump.A.In.Pres.04",
-            "Liquid.Pump.A.In.Pres.05", "Liquid.Pump.A.In.Pres.06", "Liquid.Pump.A.In.Pres.07", "Liquid.Pump.A.In.Pres.08"
+            "Liquid.Pump.A.OutPres.01", "Liquid.Pump.A.OutPres.02", "Liquid.Pump.A.OutPres.03", "Liquid.Pump.A.OutPres.04",
+            "Liquid.Pump.A.OutPres.05", "Liquid.Pump.A.OutPres.06", "Liquid.Pump.A.OutPres.07", "Liquid.Pump.A.OutPres.08"
         ],
         "map": {
             "ShieldTail.Seal.Rear.Pres.02": "盾尾密封后压力02",
@@ -140,14 +140,14 @@ def risk_metadata() -> Dict[str, Any]:
             "ShieldTail.Seal.Rear.Pres.15": "盾尾密封后压力15",
             "ShieldTail.Seal.Rear.Pres.17": "盾尾密封后压力17",
             "ShieldTail.Seal.Rear.Pres.19": "盾尾密封后压力19",
-            "Liquid.Pump.A.In.Pres.01": "A液泵入口压力01",
-            "Liquid.Pump.A.In.Pres.02": "A液泵入口压力02",
-            "Liquid.Pump.A.In.Pres.03": "A液泵入口压力03",
-            "Liquid.Pump.A.In.Pres.04": "A液泵入口压力04",
-            "Liquid.Pump.A.In.Pres.05": "A液泵入口压力05",
-            "Liquid.Pump.A.In.Pres.06": "A液泵入口压力06",
-            "Liquid.Pump.A.In.Pres.07": "A液泵入口压力07",
-            "Liquid.Pump.A.In.Pres.08": "A液泵入口压力08",
+            "Liquid.Pump.A.OutPres.01": "A液泵出口压力01",
+            "Liquid.Pump.A.OutPres.02": "A液泵出口压力02",
+            "Liquid.Pump.A.OutPres.03": "A液泵出口压力03",
+            "Liquid.Pump.A.OutPres.04": "A液泵出口压力04",
+            "Liquid.Pump.A.OutPres.05": "A液泵出口压力05",
+            "Liquid.Pump.A.OutPres.06": "A液泵出口压力06",
+            "Liquid.Pump.A.OutPres.07": "A液泵出口压力07",
+            "Liquid.Pump.A.OutPres.08": "A液泵出口压力08",
         },
         "units": {
             "盾尾密封后压力02": "bar",
@@ -158,14 +158,14 @@ def risk_metadata() -> Dict[str, Any]:
             "盾尾密封后压力15": "bar",
             "盾尾密封后压力17": "bar",
             "盾尾密封后压力19": "bar",
-            "A液泵入口压力01": "bar",
-            "A液泵入口压力02": "bar",
-            "A液泵入口压力03": "bar",
-            "A液泵入口压力04": "bar",
-            "A液泵入口压力05": "bar",
-            "A液泵入口压力06": "bar",
-            "A液泵入口压力07": "bar",
-            "A液泵入口压力08": "bar",
+            "A液泵出口压力01": "bar",
+            "A液泵出口压力02": "bar",
+            "A液泵出口压力03": "bar",
+            "A液泵出口压力04": "bar",
+            "A液泵出口压力05": "bar",
+            "A液泵出口压力06": "bar",
+            "A液泵出口压力07": "bar",
+            "A液泵出口压力08": "bar",
         },
     }
 
