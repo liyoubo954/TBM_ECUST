@@ -614,23 +614,31 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None, mu
     return final_results
 
 
-def query_ring_data(ring_number, measurement=None):
+def query_ring_data(ring_number, measurement=None, fields=None):
     try:
         m = measurement or INFLUXDB_MEASUREMENT
         ring_formatted = f"{int(float(ring_number))}.00"
+        if fields and isinstance(fields, (list, tuple)):
+            safe_fields = []
+            for f in fields:
+                if isinstance(f, str) and f.strip():
+                    safe_fields.append(f.strip())
+            select_clause = ", ".join([f"\"{f}\"" for f in safe_fields]) if safe_fields else "*"
+        else:
+            select_clause = "*"
         query_exact = f"""
-        SELECT * FROM "{m}" 
+        SELECT {select_clause} FROM "{m}" 
         WHERE "Ring.No"='{ring_formatted}' 
         ORDER BY time ASC
         """
         query_numeric = f"""
-        SELECT * FROM "{m}" 
+        SELECT {select_clause} FROM "{m}" 
         WHERE "Ring.No"={float(ring_number)} 
         ORDER BY time ASC
         """
         ring_int_val = int(float(ring_number))
         query_range = f"""
-        SELECT * FROM "{m}" 
+        SELECT {select_clause} FROM "{m}" 
         WHERE "Ring.No" >= {ring_int_val} AND "Ring.No" < {ring_int_val + 1} 
         ORDER BY time ASC
         """
@@ -843,12 +851,12 @@ def get_risk_level():
 
         multi_ring_data = query_ring_range_data(start_ring, center_int + 1, measurement=measurement, fields=sorted(required_fields))
         if not multi_ring_data:
-            multi_ring_data = query_consecutive_ring_data(ring_number, count=6, measurement=measurement) or []
+            multi_ring_data = query_consecutive_ring_data(ring_number, count=6, measurement=measurement, fields=sorted(required_fields)) or []
 
         ring_points_map = _group_points_by_ring(multi_ring_data)
         original_ring_data = ring_points_map.get(center_int) or []
         if not original_ring_data:
-            ring_data = query_ring_data(ring_number, measurement=measurement)
+            ring_data = query_ring_data(ring_number, measurement=measurement, fields=sorted(required_fields))
             original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
 
         if not original_ring_data:
@@ -1410,7 +1418,7 @@ def get_latest_risk_level_simple():
         return jsonify({"status": "error", "error": f"获取最新风险等级简报时发生错误: {str(e)}"}), 500
 
 
-def query_consecutive_ring_data(center_ring, count=6, measurement=None):
+def query_consecutive_ring_data(center_ring, count=6, measurement=None, fields=None):
     try:
         ring_int = int(float(center_ring))
         combined = []
@@ -1418,7 +1426,7 @@ def query_consecutive_ring_data(center_ring, count=6, measurement=None):
         r = ring_int
         target_count = int(count)
         while r > 0 and len(rings_collected) < target_count:
-            pts = query_ring_data(r, measurement=measurement)
+            pts = query_ring_data(r, measurement=measurement, fields=fields)
             if pts:
                 combined.extend(pts)
                 rings_collected.add(r)
