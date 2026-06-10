@@ -1,0 +1,465 @@
+{
+  "learning_type": "unsupervised_normal_only",
+  "training_mode": "stratum_specific",
+  "stratum_label": "2",
+  "config": {
+    "sequence_length": 6,
+    "feature_weights": {
+      "Thrust.Spd": 1.5,
+      "Thrust.Force": 1.5,
+      "CH.Tot.ContactForce": 1.5,
+      "CH.Spd": 0.7,
+      "CH.Torque": 0.7,
+      "含水率": 1.1,
+      "孔隙比": 1.1,
+      "塑性指数": 1.1,
+      "液性指数": 1.1,
+      "内摩擦角": 1.1,
+      "黏聚力": 1.1,
+      "容重（重度）": 1.1,
+      "饱和单轴抗压强度标准值": 1.1,
+      "完整性指数": 1.1,
+      "泊松比": 1.1,
+      "重型圆锥动力触探锤击数N": 1.1
+    },
+    "risk_fusion": {
+      "ae_weight": 0.35,
+      "if_weight": 0.65
+    },
+    "data_processing": {
+      "random_seed": 42,
+      "rings_per_sequence": 6,
+      "window_points": 48,
+      "window_stride": 8,
+      "sequence_stride": 1,
+      "max_train_sequences": 80000,
+      "max_val_sequences": 20000,
+      "max_test_sequences": 30000,
+      "clip_zscore": 3.5,
+      "smoothing_window": 5
+    },
+    "autoencoder_params": {
+      "hidden_size": 48,
+      "num_layers": 1,
+      "dropout": 0.1,
+      "learning_rate": 0.0005,
+      "batch_size": 64,
+      "epochs": 25,
+      "patience": 10,
+      "min_delta": 0.0001,
+      "l2": 1e-05
+    },
+    "isolation_forest_params": {
+      "contamination": 0.01,
+      "random_state": 42,
+      "n_estimators": 200,
+      "max_fit_samples": 50000,
+      "max_samples_per_tree": 2048,
+      "use_interactions": false,
+      "n_jobs": -1
+    },
+    "aggregation": {
+      "per_ring_mode": "median",
+      "final_ring_mode": "median",
+      "quantile_p": 0.75,
+      "topk_k": 3
+    },
+    "risk_calibration": {
+      "enabled": true,
+      "low_quantile": 0.99,
+      "medium_quantile": 0.999,
+      "high_quantile": 0.9997,
+      "scale_low_quantile": 0.5,
+      "scale_high_quantile": 0.999,
+      "include_test_normal": true,
+      "ae_error_bounds": {
+        "low": 0.16163578629493713,
+        "high": 2.1009410858154296
+      },
+      "if_anomaly_bounds": {
+        "low": -0.10389035672053648,
+        "high": 0.047472221843404556
+      },
+      "risk_thresholds": {
+        "low": 0.7766755039365463,
+        "medium": 0.8633005343291096,
+        "high": 0.9031114076036384
+      },
+      "calibration_sample_count": 2014
+    },
+    "risk_postprocessing": {
+      "normal_only_training": true,
+      "min_consecutive_windows_for_low": 2,
+      "min_consecutive_windows_for_medium": 4,
+      "min_consecutive_windows_for_high": 6,
+      "min_consecutive_rings_for_medium": 2,
+      "min_consecutive_rings_for_high": 3,
+      "downgrade_isolated_level": "no_risk"
+    },
+    "reporting": {
+      "score_batch_size": 1024,
+      "scatter_sample_size": 12000,
+      "max_calibration_sequences": 40000
+    }
+  },
+  "features": [
+    "Thrust.Spd",
+    "CH.Spd",
+    "CH.Torque",
+    "Thrust.Force",
+    "CH.Tot.ContactForce",
+    "含水率",
+    "容重（重度）",
+    "孔隙比",
+    "塑性指数",
+    "液性指数",
+    "内摩擦角",
+    "黏聚力",
+    "饱和单轴抗压强度标准值",
+    "完整性指数",
+    "泊松比",
+    "重型圆锥动力触探锤击数N"
+  ],
+  "feature_dim": 768,
+  "input_feature_counts": {
+    "tbm_features": 5,
+    "geo_features": 11
+  },
+  "feature_coverage": {
+    "Thrust.Spd": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "CH.Spd": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "CH.Torque": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "Thrust.Force": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "CH.Tot.ContactForce": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "含水率": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "容重（重度）": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "孔隙比": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "塑性指数": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "液性指数": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "内摩擦角": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "黏聚力": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "饱和单轴抗压强度标准值": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "完整性指数": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "泊松比": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    },
+    "重型圆锥动力触探锤击数N": {
+      "valid_count": 33616,
+      "valid_ratio": 1.0
+    }
+  },
+  "feature_groups": {
+    "tbm_features": [
+      "Thrust.Spd",
+      "CH.Spd",
+      "CH.Torque",
+      "Thrust.Force",
+      "CH.Tot.ContactForce"
+    ],
+    "engineered_features": [],
+    "geo_features": [
+      "含水率",
+      "容重（重度）",
+      "孔隙比",
+      "塑性指数",
+      "液性指数",
+      "内摩擦角",
+      "黏聚力",
+      "饱和单轴抗压强度标准值",
+      "完整性指数",
+      "泊松比",
+      "重型圆锥动力触探锤击数N"
+    ]
+  },
+  "split_info": {
+    "sources": {
+      "cluster_2:tbm_parameters+cluster_2": {
+        "train_rings": [
+          960,
+          961,
+          962,
+          963,
+          964,
+          965,
+          966,
+          972,
+          973,
+          974,
+          975,
+          976,
+          977,
+          978,
+          979,
+          980,
+          981,
+          982,
+          983,
+          984,
+          985,
+          986,
+          987,
+          988,
+          989,
+          990,
+          991,
+          992,
+          993,
+          998,
+          999,
+          1000,
+          1001,
+          1004,
+          1005,
+          1006,
+          1007,
+          1008,
+          1009,
+          1010,
+          1011,
+          1012,
+          1013,
+          1014,
+          1015,
+          1016,
+          1017,
+          1018,
+          1019,
+          1020,
+          1021,
+          1022,
+          1023,
+          1024,
+          1025,
+          1026,
+          1027,
+          1028,
+          1029,
+          1030,
+          1031,
+          1032,
+          1033,
+          1034,
+          1035,
+          1036,
+          1037
+        ],
+        "val_rings": [
+          1038,
+          1039,
+          1040,
+          1041,
+          1042,
+          1046,
+          1047,
+          1048,
+          1123,
+          1124,
+          1125,
+          1126,
+          1127,
+          1128,
+          1129,
+          1130,
+          1131,
+          1132,
+          1133,
+          1134,
+          1135,
+          1136,
+          1137
+        ],
+        "test_rings": [
+          1138,
+          1139,
+          1140,
+          1141,
+          1142,
+          1143,
+          1144,
+          1145,
+          1146,
+          1147,
+          1148,
+          1149,
+          1150,
+          1151,
+          1152,
+          1153,
+          1154,
+          1155,
+          1156,
+          1157,
+          1158,
+          1159,
+          1160
+        ],
+        "ring_count": 113,
+        "split_mode": "ring_level"
+      }
+    },
+    "raw_sequence_counts": {
+      "train": 1190,
+      "val": 389,
+      "test": 435
+    },
+    "sequence_counts": {
+      "train": 1190,
+      "val": 389,
+      "test": 435
+    },
+    "features": [
+      "Thrust.Spd",
+      "CH.Spd",
+      "CH.Torque",
+      "Thrust.Force",
+      "CH.Tot.ContactForce",
+      "含水率",
+      "容重（重度）",
+      "孔隙比",
+      "塑性指数",
+      "液性指数",
+      "内摩擦角",
+      "黏聚力",
+      "饱和单轴抗压强度标准值",
+      "完整性指数",
+      "泊松比",
+      "重型圆锥动力触探锤击数N"
+    ],
+    "geo_features_used_as_model_input": [
+      "含水率",
+      "容重（重度）",
+      "孔隙比",
+      "塑性指数",
+      "液性指数",
+      "内摩擦角",
+      "黏聚力",
+      "饱和单轴抗压强度标准值",
+      "完整性指数",
+      "泊松比",
+      "重型圆锥动力触探锤击数N"
+    ]
+  },
+  "training_history": {
+    "loss": [
+      0.6708652377128601,
+      0.5300930142402649,
+      0.4246757924556732,
+      0.35454294085502625,
+      0.3016904890537262,
+      0.2606182396411896,
+      0.22718650102615356,
+      0.20061832666397095,
+      0.1785789281129837,
+      0.1588875949382782,
+      0.14126765727996826,
+      0.1268099546432495,
+      0.11380081623792648,
+      0.10211186110973358,
+      0.09294963628053665,
+      0.08443944901227951,
+      0.07689392566680908,
+      0.06986100226640701,
+      0.06442783772945404,
+      0.06032752990722656,
+      0.057730745524168015,
+      0.055266737937927246,
+      0.05344848707318306,
+      0.05112112686038017
+    ],
+    "val_loss": [
+      2.7410030364990234,
+      2.2864415645599365,
+      2.0403637886047363,
+      1.866805911064148,
+      1.6247702836990356,
+      1.4681339263916016,
+      1.3738471269607544,
+      1.3227837085723877,
+      1.2858202457427979,
+      1.2805780172348022,
+      1.248817801475525,
+      1.2540384531021118,
+      1.2535479068756104,
+      1.2453919649124146,
+      1.2768619060516357,
+      1.3020820617675781,
+      1.3321952819824219,
+      1.352667212486267,
+      1.3631665706634521,
+      1.3951219320297241,
+      1.3965578079223633,
+      1.3652055263519287,
+      1.3859279155731201,
+      1.4009760618209839
+    ],
+    "lr": [
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0005000000237487257,
+      0.0002500000118743628,
+      0.0002500000118743628,
+      0.0002500000118743628,
+      0.0002500000118743628,
+      0.0002500000118743628
+    ]
+  }
+}

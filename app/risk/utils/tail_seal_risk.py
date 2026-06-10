@@ -1,31 +1,111 @@
 import numpy as np
 from typing import Dict, List, Any
+
+UNIFIED_REQUIRED_PARAMS = {
+    "Tail.Seal.Rear.Prs.02": "2#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.04": "4#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.06": "6#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.09": "9#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.12": "12#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.15": "15#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.17": "17#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.19": "19#盾尾密封后压力",
+    "LiqPump.A.Out.Prs.01": "1#A液泵出口压力",
+    "LiqPump.A.Out.Prs.02": "2#A液泵出口压力",
+    "LiqPump.A.Out.Prs.03": "3#A液泵出口压力",
+    "LiqPump.A.Out.Prs.04": "4#A液泵出口压力",
+    "LiqPump.A.Out.Prs.05": "5#A液泵出口压力",
+    "LiqPump.A.Out.Prs.06": "6#A液泵出口压力",
+    "LiqPump.A.Out.Prs.07": "7#A液泵出口压力",
+    "LiqPump.A.Out.Prs.08": "8#A液泵出口压力",
+}
+
 UNIFIED_SEAL_SENSORS = [
-    'ShieldTail.Seal.Rear.Pres.02', 'ShieldTail.Seal.Rear.Pres.04', 'ShieldTail.Seal.Rear.Pres.06', 'ShieldTail.Seal.Rear.Pres.09',
-    'ShieldTail.Seal.Rear.Pres.12', 'ShieldTail.Seal.Rear.Pres.15', 'ShieldTail.Seal.Rear.Pres.17', 'ShieldTail.Seal.Rear.Pres.19'
+    "Tail.Seal.Rear.Prs.02",
+    "Tail.Seal.Rear.Prs.04",
+    "Tail.Seal.Rear.Prs.06",
+    "Tail.Seal.Rear.Prs.09",
+    "Tail.Seal.Rear.Prs.12",
+    "Tail.Seal.Rear.Prs.15",
+    "Tail.Seal.Rear.Prs.17",
+    "Tail.Seal.Rear.Prs.19",
 ]
 UNIFIED_GROUT_SENSORS = [
-    'Liquid.Pump.A.OutPres.01', 'Liquid.Pump.A.OutPres.02', 'Liquid.Pump.A.OutPres.03', 'Liquid.Pump.A.OutPres.04',
-    'Liquid.Pump.A.OutPres.05', 'Liquid.Pump.A.OutPres.06', 'Liquid.Pump.A.OutPres.07', 'Liquid.Pump.A.OutPres.08'
+    "LiqPump.A.Out.Prs.01",
+    "LiqPump.A.Out.Prs.02",
+    "LiqPump.A.Out.Prs.03",
+    "LiqPump.A.Out.Prs.04",
+    "LiqPump.A.Out.Prs.05",
+    "LiqPump.A.Out.Prs.06",
+    "LiqPump.A.Out.Prs.07",
+    "LiqPump.A.Out.Prs.08",
 ]
-UNIFIED_PARAMS_CHINESE = {
-    'ShieldTail.Seal.Rear.Pres.02': '盾尾密封后压力02',
-    'ShieldTail.Seal.Rear.Pres.04': '盾尾密封后压力04',
-    'ShieldTail.Seal.Rear.Pres.06': '盾尾密封后压力06',
-    'ShieldTail.Seal.Rear.Pres.09': '盾尾密封后压力09',
-    'ShieldTail.Seal.Rear.Pres.12': '盾尾密封后压力12',
-    'ShieldTail.Seal.Rear.Pres.15': '盾尾密封后压力15',
-    'ShieldTail.Seal.Rear.Pres.17': '盾尾密封后压力17',
-    'ShieldTail.Seal.Rear.Pres.19': '盾尾密封后压力19',
-    'Liquid.Pump.A.OutPres.01': 'A液泵出口压力01',
-    'Liquid.Pump.A.OutPres.02': 'A液泵出口压力02',
-    'Liquid.Pump.A.OutPres.03': 'A液泵出口压力03',
-    'Liquid.Pump.A.OutPres.04': 'A液泵出口压力04',
-    'Liquid.Pump.A.OutPres.05': 'A液泵出口压力05',
-    'Liquid.Pump.A.OutPres.06': 'A液泵出口压力06',
-    'Liquid.Pump.A.OutPres.07': 'A液泵出口压力07',
-    'Liquid.Pump.A.OutPres.08': 'A液泵出口压力08'
+
+RISK_SPEC = {
+    "name": "盾尾密封失效风险",
+    "risk_type_label": "盾尾密封失效",
+    "full_risk_type": "盾尾密封失效风险",
+    "output_key": "tail_seal_risk",
+    "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
+    "potential_risk": "盾尾密封失效预警",
+    "fields": list(UNIFIED_REQUIRED_PARAMS.keys()),
+    "map": dict(UNIFIED_REQUIRED_PARAMS),
+    "units": {
+        "2#盾尾密封后压力": "bar",
+        "4#盾尾密封后压力": "bar",
+        "6#盾尾密封后压力": "bar",
+        "9#盾尾密封后压力": "bar",
+        "12#盾尾密封后压力": "bar",
+        "15#盾尾密封后压力": "bar",
+        "17#盾尾密封后压力": "bar",
+        "19#盾尾密封后压力": "bar",
+        "1#A液泵出口压力": "bar",
+        "2#A液泵出口压力": "bar",
+        "3#A液泵出口压力": "bar",
+        "4#A液泵出口压力": "bar",
+        "5#A液泵出口压力": "bar",
+        "6#A液泵出口压力": "bar",
+        "7#A液泵出口压力": "bar",
+        "8#A液泵出口压力": "bar",
+    },
+    "score_points": [(0.0, 4.0), (0.3, 3.5), (0.5, 2.0), (0.9, 0.5), (1.0, 0.0)],
+    "probability_thresholds": (0.5, 0.3),
+    "fault_reason_analysis": {
+        "无风险Ⅰ": "盾尾密封压力与注浆压力处于工况目标区间，密封刷弹性良好、刷列贴合充分，无渗水或浆液串漏现象，与管片拼装配合稳定。",
+        "低风险Ⅱ": "密封压力与注脂量轻微上调以维持密封效果，提示局部刷列出现初期磨耗或贴合度下降，个别位置可能存在微渗。若维持该趋势将加速磨耗与膜层破坏，需关注注脂分配均衡与刷列状态。",
+        "中风险Ⅲ": "密封压力波动加剧，注脂量显著增加以对冲密封衰减；腔压与负荷出现不稳定相关性。可见局部渗漏与刷列磨耗加重，密封水/浆屏障降低，若不干预将扩大至环向失效并影响管片成型与对口质量。",
+        "高风险Ⅳ": "刷列严重磨损、撕裂或压损导致渗漏明确，密封压力难以维持，同步注浆与防水能力显著下降。继续掘进将带来水浆侵入、质量与安全复合风险，应在保护窗口内处置并恢复密封能力。",
+    },
+    "measures": {
+        "无风险Ⅰ": {
+            "measures": ["正常监控：监控密封状态", "定期保养：检查密封分配器和管路"],
+            "reason": "密封压力与注浆压力处于工况目标区间，密封刷贴合充分，无渗水或浆液串漏现象。",
+        },
+        "低风险Ⅱ": {
+            "measures": ["正常监控：监控密封状态", "定期保养：检查密封分配器和管路"],
+            "reason": "密封压力与注脂量轻微上调以维持密封效果，提示局部刷列初期磨耗或贴合度下降，个别位置可能存在微渗。",
+        },
+        "中风险Ⅲ": {
+            "measures": ["加强密封监控：每小时检查一次密封状态", "检查密封圈状态：评估密封圈磨损程度"],
+            "reason": "密封压力波动加剧，注脂量明显增加以对冲密封衰减；局部渗漏与刷列磨耗加重，屏障能力降低。",
+        },
+        "高风险Ⅳ": {
+            "measures": ["立即停机：停止掘进作业", "检查密封系统状态：详细检查工作舱压力"],
+            "reason": "刷列严重磨损、撕裂或压损导致渗漏明确，密封压力难以维持，同步注浆与防水能力显著下降。",
+        },
+    },
 }
+
+
+def _to_sensor_value(value: Any) -> float:
+    return float(value) if value is not None and isinstance(value, (int, float)) else np.nan
+
+
+def _get_sensor_raw_value(data: Dict[str, Any], sensor_key: str) -> Any:
+    if sensor_key in data and data[sensor_key] is not None:
+        return data[sensor_key]
+    return None
+
 
 def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
     mapped_data = {
@@ -34,41 +114,19 @@ def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
     }
     
     # 严格校验：如果所有的密封压力传感器或者注浆压力传感器都在数据中缺失，则抛出异常
-    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if s not in data or data[s] is None]
-    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if s not in data or data[s] is None]
+    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if _get_sensor_raw_value(data, s) is None]
+    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if _get_sensor_raw_value(data, s) is None]
     
     if len(missing_seal) == len(UNIFIED_SEAL_SENSORS) and len(missing_grout) == len(UNIFIED_GROUT_SENSORS):
          raise ValueError("盾尾密封风险计算缺少所有压力数据")
 
     for sensor in UNIFIED_SEAL_SENSORS:
-        val = data.get(sensor)
-        if val is not None and isinstance(val, (int, float)):
-            mapped_data['seal_pressures'].append(float(val))
-        else:
-            mapped_data['seal_pressures'].append(np.nan) # 使用 NaN 表示缺失，后续计算会跳过该点
+        mapped_data['seal_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
             
     for sensor in UNIFIED_GROUT_SENSORS:
-        val = data.get(sensor)
-        if val is not None and isinstance(val, (int, float)):
-            mapped_data['grout_pressures'].append(float(val))
-        else:
-            mapped_data['grout_pressures'].append(np.nan) # 使用 NaN 表示缺失
+        mapped_data['grout_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
             
     return mapped_data
-
-
-# 入口函数保持兼容签名，但忽略 shield_id
-def calculate_tail_seal_risk(data_dict: dict, shield_id: str = 'ignored') -> dict:
-    try:
-        result = calculate_universal_tail_seal_risk(data_dict)
-        return {
-            'probability': result.get('probability', 0.0),
-            'risk_level': result.get('risk_level', '无风险'),
-            'details': result.get('details', '无详细信息')
-        }
-    except Exception as e:
-        raise
-
 
 def calculate_universal_tail_seal_risk(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
@@ -120,102 +178,3 @@ def calculate_universal_tail_seal_risk(data: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         raise RuntimeError(f"盾尾密封风险评估失败: {str(e)}")
-
-
-def risk_metadata() -> Dict[str, Any]:
-    return {
-        "name": "盾尾密封失效风险",
-        "fields": [
-            "ShieldTail.Seal.Rear.Pres.02", "ShieldTail.Seal.Rear.Pres.04", "ShieldTail.Seal.Rear.Pres.06", "ShieldTail.Seal.Rear.Pres.09",
-            "ShieldTail.Seal.Rear.Pres.12", "ShieldTail.Seal.Rear.Pres.15", "ShieldTail.Seal.Rear.Pres.17", "ShieldTail.Seal.Rear.Pres.19",
-            "Liquid.Pump.A.OutPres.01", "Liquid.Pump.A.OutPres.02", "Liquid.Pump.A.OutPres.03", "Liquid.Pump.A.OutPres.04",
-            "Liquid.Pump.A.OutPres.05", "Liquid.Pump.A.OutPres.06", "Liquid.Pump.A.OutPres.07", "Liquid.Pump.A.OutPres.08"
-        ],
-        "map": {
-            "ShieldTail.Seal.Rear.Pres.02": "盾尾密封后压力02",
-            "ShieldTail.Seal.Rear.Pres.04": "盾尾密封后压力04",
-            "ShieldTail.Seal.Rear.Pres.06": "盾尾密封后压力06",
-            "ShieldTail.Seal.Rear.Pres.09": "盾尾密封后压力09",
-            "ShieldTail.Seal.Rear.Pres.12": "盾尾密封后压力12",
-            "ShieldTail.Seal.Rear.Pres.15": "盾尾密封后压力15",
-            "ShieldTail.Seal.Rear.Pres.17": "盾尾密封后压力17",
-            "ShieldTail.Seal.Rear.Pres.19": "盾尾密封后压力19",
-            "Liquid.Pump.A.OutPres.01": "A液泵出口压力01",
-            "Liquid.Pump.A.OutPres.02": "A液泵出口压力02",
-            "Liquid.Pump.A.OutPres.03": "A液泵出口压力03",
-            "Liquid.Pump.A.OutPres.04": "A液泵出口压力04",
-            "Liquid.Pump.A.OutPres.05": "A液泵出口压力05",
-            "Liquid.Pump.A.OutPres.06": "A液泵出口压力06",
-            "Liquid.Pump.A.OutPres.07": "A液泵出口压力07",
-            "Liquid.Pump.A.OutPres.08": "A液泵出口压力08",
-        },
-        "units": {
-            "盾尾密封后压力02": "bar",
-            "盾尾密封后压力04": "bar",
-            "盾尾密封后压力06": "bar",
-            "盾尾密封后压力09": "bar",
-            "盾尾密封后压力12": "bar",
-            "盾尾密封后压力15": "bar",
-            "盾尾密封后压力17": "bar",
-            "盾尾密封后压力19": "bar",
-            "A液泵出口压力01": "bar",
-            "A液泵出口压力02": "bar",
-            "A液泵出口压力03": "bar",
-            "A液泵出口压力04": "bar",
-            "A液泵出口压力05": "bar",
-            "A液泵出口压力06": "bar",
-            "A液泵出口压力07": "bar",
-            "A液泵出口压力08": "bar",
-        },
-    }
-
-
-def get_measures_and_reason(risk_level: str):
-    mapping = {
-        "无风险Ⅰ": {
-            "measures": ["正常监控：监控密封状态", "定期保养：检查密封分配器和管路"],
-            "reason": "密封压力与注浆压力处于工况目标区间，密封刷贴合充分，无渗水或浆液串漏现象。"
-        },
-        "低风险Ⅱ": {
-            "measures": ["正常监控：监控密封状态", "定期保养：检查密封分配器和管路"],
-            "reason": "密封压力与注脂量轻微上调以维持密封效果，提示局部刷列初期磨耗或贴合度下降，个别位置可能存在微渗。"
-        },
-        "中风险Ⅲ": {
-            "measures": ["加强密封监控：每小时检查一次密封状态", "检查密封圈状态：评估密封圈磨损程度"],
-            "reason": "密封压力波动加剧，注脂量明显增加以对冲密封衰减；局部渗漏与刷列磨耗加重，屏障能力降低。"
-        },
-        "高风险Ⅳ": {
-            "measures": ["立即停机：停止掘进作业", "检查密封系统状态：详细检查工作舱压力"],
-            "reason": "刷列严重磨损、撕裂或压损导致渗漏明确，密封压力难以维持，同步注浆与防水能力显著下降。"
-        }
-    }
-    d = mapping.get(risk_level)
-    return (d.get("measures", []), d.get("reason", "")) if d else ([], "")
-
-
-def probability_to_score(probability: float) -> float:
-    p = float(probability or 0.0)
-    if p >= 0.9:
-        return 0.5 - (p - 0.9) * 0.5 / 0.1
-    elif p >= 0.5:
-        return 2 - (p - 0.5) * 1.5 / (0.9 - 0.5)
-    elif p >= 0.3:
-        return 3.5 - (p - 0.3) * 1.5 / (0.5 - 0.3)
-    else:
-        return 4.0 - p * 0.5 / 0.3
-
-
-def reverse_score_to_probability(score: float) -> float:
-    s = float(score or 0.0)
-    if s <= 0.5:
-        return 0.9 + (0.5 - s) * 0.2
-    elif s <= 2:
-        return 0.5 + (2 - s) * (0.4 / 1.5)
-    elif s <= 3.5:
-        return 0.3 + (3.5 - s) * (0.2 / 1.5)
-    else:
-        return (4.0 - s) * 0.6
-
-
-def probability_thresholds():
-    return 0.5, 0.3

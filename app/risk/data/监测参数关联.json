@@ -1,0 +1,4715 @@
+{
+  "nodes": {
+    "推进系统": [
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "推进油缸行程07",
+          "parameter_id": "Prop.Cyl.Stroke.07",
+          "elementid": 0
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "推进油缸行程05",
+          "parameter_id": "Prop.Cyl.Stroke.05",
+          "elementid": 7
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "贯入度",
+          "parameter_id": "Penet",
+          "elementid": 10
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "推力",
+          "parameter_id": "Thrust",
+          "elementid": 27
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "推进油缸行程06",
+          "parameter_id": "Prop.Cyl.Stroke.06",
+          "elementid": 28
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "推进速度",
+          "parameter_id": "Prop.Spd",
+          "elementid": 30
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "E组推进泵流量",
+          "parameter_id": "E.Prop.Pump.Flow",
+          "elementid": 44
+        }
+      },
+      {
+        "properties": {
+          "system": "推进系统",
+          "color": "#FEBC41",
+          "name": "A组推进泵流量",
+          "parameter_id": "A.Prop.Pump.Flow",
+          "elementid": 67
+        }
+      }
+    ],
+    "注浆系统": [
+      {
+        "properties": {
+          "system": "注浆系统",
+          "color": "#04A9FE",
+          "name": "B液泵累计量08",
+          "parameter_id": "Liquid.Pump.B.AccVol.08",
+          "elementid": 1
+        }
+      },
+      {
+        "properties": {
+          "system": "注浆系统",
+          "color": "#04A9FE",
+          "name": "A液泵累计量01",
+          "parameter_id": "Liquid.Pump.A.AccVol.01",
+          "elementid": 29
+        }
+      },
+      {
+        "properties": {
+          "system": "注浆系统",
+          "color": "#04A9FE",
+          "name": "注浆总累积量",
+          "parameter_id": "Grout.TtlAcc",
+          "elementid": 45
+        }
+      },
+      {
+        "properties": {
+          "system": "注浆系统",
+          "color": "#04A9FE",
+          "name": "A液泵累计量08",
+          "parameter_id": "Liquid.Pump.A.AccVol.08",
+          "elementid": 61
+        }
+      }
+    ],
+    "主驱动系统": [
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC06电机电流",
+          "parameter_id": "MD.Motor.Curr.FC06",
+          "elementid": 2
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC08电机电流",
+          "parameter_id": "MD.Motor.Curr.FC08",
+          "elementid": 6
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC13电机电流",
+          "parameter_id": "MD.Motor.Curr.FC13",
+          "elementid": 11
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC14电机电流",
+          "parameter_id": "MD.Motor.Curr.FC14",
+          "elementid": 12
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC02电机温度",
+          "parameter_id": "MD.Motor.Temp.FC02",
+          "elementid": 14
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主轴承HBW油脂压力01",
+          "parameter_id": "MB.HBW.Grs.Pres.01",
+          "elementid": 16
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC08电机温度",
+          "parameter_id": "MD.Motor.Temp.FC08",
+          "elementid": 17
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC05电机温度",
+          "parameter_id": "MD.Motor.Temp.FC05",
+          "elementid": 20
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC09电机温度",
+          "parameter_id": "MD.Motor.Temp.FC09",
+          "elementid": 22
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC13电机温度",
+          "parameter_id": "MD.Motor.Temp.FC13",
+          "elementid": 23
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC12电机温度",
+          "parameter_id": "MD.Motor.Temp.FC12",
+          "elementid": 24
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC15电机温度",
+          "parameter_id": "MD.Motor.Temp.FC15",
+          "elementid": 25
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC07电机转速",
+          "parameter_id": "MD.Motor.Spd.FC07",
+          "elementid": 26
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC04电机温度",
+          "parameter_id": "MD.Motor.Temp.FC04",
+          "elementid": 31
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动冷却水回水温度",
+          "parameter_id": "MD.CoolWater.RetWater.Temp",
+          "elementid": 33
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC15电机转速",
+          "parameter_id": "MD.Motor.Spd.FC15",
+          "elementid": 36
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC14电机温度",
+          "parameter_id": "MD.Motor.Temp.FC14",
+          "elementid": 39
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC12电机转速",
+          "parameter_id": "MD.Motor.Spd.FC12",
+          "elementid": 40
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC04电机电流",
+          "parameter_id": "MD.Motor.Curr.FC04",
+          "elementid": 42
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC10电机温度",
+          "parameter_id": "MD.Motor.Temp.FC10",
+          "elementid": 47
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC03电机温度",
+          "parameter_id": "MD.Motor.Temp.FC03",
+          "elementid": 48
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动冷却水流量",
+          "parameter_id": "MD.CoolWater.Flow",
+          "elementid": 49
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC01电机扭矩",
+          "parameter_id": "MD.Motor.FC01.Torque",
+          "elementid": 50
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC16电机温度",
+          "parameter_id": "MD.Motor.Temp.FC16",
+          "elementid": 51
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC06电机温度",
+          "parameter_id": "MD.Motor.Temp.FC06",
+          "elementid": 53
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动工作时间(H)",
+          "parameter_id": "MD.Work.Time (H)",
+          "elementid": 54
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC07电机温度",
+          "parameter_id": "MD.Motor.Temp.FC07",
+          "elementid": 55
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC10电机电流",
+          "parameter_id": "MD.Motor.Curr.FC10",
+          "elementid": 56
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC11电机温度",
+          "parameter_id": "MD.Motor.Temp.FC11",
+          "elementid": 59
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC10电机转速",
+          "parameter_id": "MD.Motor.Spd.FC10",
+          "elementid": 60
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC01电机温度",
+          "parameter_id": "MD.Motor.Temp.FC01",
+          "elementid": 62
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC07电机电流",
+          "parameter_id": "MD.Motor.Curr.FC07",
+          "elementid": 65
+        }
+      },
+      {
+        "properties": {
+          "system": "主驱动系统",
+          "color": "#8c564b",
+          "name": "主驱动FC10电机扭矩",
+          "parameter_id": "MD.Motor.FC10.Torque",
+          "elementid": 66
+        }
+      }
+    ],
+    "导向系统": [
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "俯仰角",
+          "parameter_id": "PitchAng",
+          "elementid": 3
+        }
+      },
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "盾尾水平偏移",
+          "parameter_id": "ShieldTail.Horiz.Offset",
+          "elementid": 4
+        }
+      },
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "盾首垂直偏移",
+          "parameter_id": "ShieldHead.Vert.Offset",
+          "elementid": 13
+        }
+      },
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "盾首水平偏移",
+          "parameter_id": "ShieldHead.Horiz.Offset",
+          "elementid": 43
+        }
+      },
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "盾尾垂直偏移",
+          "parameter_id": "ShieldTail.Vert.Offset",
+          "elementid": 58
+        }
+      },
+      {
+        "properties": {
+          "system": "导向系统",
+          "color": "#FE4448",
+          "name": "滚动角",
+          "parameter_id": "RollAng",
+          "elementid": 64
+        }
+      }
+    ],
+    "泥水循环系统": [
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力01",
+          "parameter_id": "ExcavCham.Pres.01",
+          "elementid": 5
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "工作舱压力01",
+          "parameter_id": "WorkCham.Pres.01",
+          "elementid": 8
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力03",
+          "parameter_id": "ExcavCham.Pres.03",
+          "elementid": 15
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力04",
+          "parameter_id": "ExcavCham.Pres.04",
+          "elementid": 19
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力05",
+          "parameter_id": "ExcavCham.Pres.05",
+          "elementid": 37
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力06",
+          "parameter_id": "ExcavCham.Pres.06",
+          "elementid": 38
+        }
+      },
+      {
+        "properties": {
+          "system": "泥水循环系统",
+          "color": "#F760FF",
+          "name": "开挖舱压力02",
+          "parameter_id": "ExcavCham.Pres.02",
+          "elementid": 46
+        }
+      }
+    ],
+    "刀盘系统": [
+      {
+        "properties": {
+          "system": "刀盘系统",
+          "color": "#12FF88",
+          "name": "刀盘转速",
+          "parameter_id": "CutterHead.Spd",
+          "elementid": 9
+        }
+      },
+      {
+        "properties": {
+          "system": "刀盘系统",
+          "color": "#12FF88",
+          "name": "刀盘转速设置",
+          "parameter_id": "CutterHead.Spd.Set",
+          "elementid": 35
+        }
+      },
+      {
+        "properties": {
+          "system": "刀盘系统",
+          "color": "#12FF88",
+          "name": "刀盘扭矩",
+          "parameter_id": "CutterHead.Torque",
+          "elementid": 63
+        }
+      }
+    ],
+    "盾尾密封系统": [
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力02",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.02",
+          "elementid": 18
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力04",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.04",
+          "elementid": 21
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力06",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.06",
+          "elementid": 32
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力09",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.09",
+          "elementid": 34
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力17",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.17",
+          "elementid": 41
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力19",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.19",
+          "elementid": 52
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力15",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.15",
+          "elementid": 57
+        }
+      },
+      {
+        "properties": {
+          "system": "盾尾密封系统",
+          "color": "#05FDFD",
+          "name": "盾尾密封后压力12",
+          "parameter_id": "ShieldTail.Seal.Rear.Pres.12",
+          "elementid": 68
+        }
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 0
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 1
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 2
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "推进油缸行程06",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 3
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC12电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 4
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 5
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 6
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 1.0,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "推进油缸行程05",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 7
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力02",
+        "correlation": 0.9999,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 8
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.9999,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "推进油缸行程05",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 9
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力04",
+        "correlation": 0.9998,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 10
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": 0.9996,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 11
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": 0.9996,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 12
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "E组推进泵流量",
+        "correlation": 0.9994,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 13
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": 0.9994,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力05",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 14
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC01电机扭矩",
+        "correlation": 0.9992,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 15
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "A液泵累计量08",
+        "correlation": 0.9992,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 16
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机扭矩",
+        "correlation": 0.999,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 17
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力05",
+        "correlation": 0.9989,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 18
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力05",
+        "correlation": 0.9988,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 19
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9979,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC09电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 20
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9979,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 21
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9977,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 22
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.9977,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 23
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC03电机温度",
+        "correlation": 0.9977,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 24
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.9976,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 25
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.9976,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 26
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9976,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC09电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 27
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机扭矩",
+        "correlation": 0.9975,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 28
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC05电机温度",
+        "correlation": 0.9974,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 29
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC09电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 30
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 31
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC04电机温度",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 32
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "B液泵累计量08",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 33
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC04电机温度",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 34
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9973,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 35
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC05电机温度",
+        "correlation": 0.9972,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 36
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9972,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 37
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9972,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 38
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 39
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 40
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 41
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "B液泵累计量08",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 42
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 43
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力04",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 44
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力04",
+        "correlation": 0.9971,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 45
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.997,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 46
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.997,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 47
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 48
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 49
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 50
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 51
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "A液泵累计量01",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 52
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 53
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 54
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力03",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 55
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 56
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机温度",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 57
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 58
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC09电机温度",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 59
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力03",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 60
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机温度",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 61
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.9968,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 62
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机温度",
+        "correlation": 0.9967,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 63
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.9967,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 64
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9967,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 65
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9966,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 66
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机温度",
+        "correlation": 0.9966,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 67
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9966,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 68
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9965,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 69
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9965,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 70
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机温度",
+        "correlation": 0.9965,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 71
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC09电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 72
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 73
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC02电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 74
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC05电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 75
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC03电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 76
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC02电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 77
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9964,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 78
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9963,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC14电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 79
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9963,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 80
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9963,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 81
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": 0.9962,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 82
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机温度",
+        "correlation": 0.9962,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 83
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.9962,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 84
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机温度",
+        "correlation": 0.9962,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 85
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": 0.9962,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 86
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机温度",
+        "correlation": 0.9961,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 87
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机温度",
+        "correlation": 0.9961,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC05电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 88
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC03电机温度",
+        "correlation": 0.996,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 89
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC05电机温度",
+        "correlation": 0.996,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 90
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机温度",
+        "correlation": 0.996,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 91
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9959,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 92
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9959,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 93
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC11电机温度",
+        "correlation": 0.9958,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 94
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.9957,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 95
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.9957,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 96
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.9957,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 97
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.9957,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 98
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.9956,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 99
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.9956,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 100
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.9956,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 101
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "A液泵累计量08",
+        "correlation": 0.9954,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 102
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9952,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 103
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.9952,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC13电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 104
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.995,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 105
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力05",
+        "correlation": 0.9948,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 106
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力05",
+        "correlation": 0.9948,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 107
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.994,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 108
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9939,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 109
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "B液泵累计量08",
+        "correlation": 0.9939,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 110
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.9929,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC12电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 111
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC11电机温度",
+        "correlation": 0.9928,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 112
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.9904,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC12电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 113
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.9903,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 114
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "刀盘转速设置",
+        "correlation": 0.9882,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 115
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.9831,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力05",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 116
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.9825,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 117
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.9811,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 118
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.981,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力06",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 119
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9807,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 120
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9807,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 121
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9791,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 122
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9786,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 123
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9786,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力06",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 124
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.9781,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力05",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 125
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.9745,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 126
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": -0.9738,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 127
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9608,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 128
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9608,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 129
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": 0.9604,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 130
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": 0.9603,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 131
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9591,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力06",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 132
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9583,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力05",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 133
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9579,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 134
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.9574,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 135
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": -0.9531,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 136
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": -0.9531,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 137
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": -0.9531,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 138
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": -0.9531,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 139
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 140
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 141
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 142
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 143
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 144
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 145
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 146
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": 0.9496,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC01电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 147
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": 0.9482,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 148
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": 0.9482,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 149
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": 0.9482,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 150
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 0.9482,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 151
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": -0.9421,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动工作时间(H)",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 152
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.94,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "推力",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 153
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": -0.9368,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 154
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": -0.9368,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 155
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": -0.9368,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 156
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": -0.9368,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 157
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.9253,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 158
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": -0.9228,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动工作时间(H)",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 159
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.9211,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 160
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.9067,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 161
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机电流",
+        "correlation": 0.9061,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 162
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": 0.905,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 163
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.9048,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 164
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.9031,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 165
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机电流",
+        "correlation": 0.9025,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 166
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": 0.8998,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 167
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": 0.8994,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 168
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": -0.8989,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 169
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.8981,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC13电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 170
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.8979,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 171
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.8969,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 172
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.8966,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 173
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": 0.8956,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 174
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": -0.8932,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 175
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": 0.8928,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "盾首垂直偏移",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 176
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC01电机扭矩",
+        "correlation": -0.8928,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力06",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 177
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC01电机扭矩",
+        "correlation": -0.892,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力04",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 178
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC01电机扭矩",
+        "correlation": -0.8919,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力05",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 179
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力06",
+        "correlation": -0.891,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 180
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": 0.8907,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 181
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力04",
+        "correlation": -0.8903,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 182
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力05",
+        "correlation": -0.8903,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 183
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC01电机扭矩",
+        "correlation": -0.8891,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力03",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 184
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.8883,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 185
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力03",
+        "correlation": -0.8873,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "刀盘扭矩",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 186
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.8857,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 187
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机电流",
+        "correlation": 0.8852,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 188
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": 0.8769,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 189
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动工作时间(H)",
+        "correlation": 0.8737,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 190
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": 0.8735,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 191
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机扭矩",
+        "correlation": -0.8656,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力01",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 192
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机扭矩",
+        "correlation": -0.8656,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "开挖舱压力02",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 193
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.8613,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC12电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 194
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.8612,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC07电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 195
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.8612,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC15电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 196
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.8612,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机转速",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 197
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": -0.8529,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC10电机扭矩",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 198
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.8429,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 199
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机温度",
+        "correlation": 0.839,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 200
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.8378,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC13电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 201
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": 0.8375,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动工作时间(H)",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 202
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC11电机温度",
+        "correlation": 0.8344,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 203
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机温度",
+        "correlation": 0.8323,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 204
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC11电机温度",
+        "correlation": 0.8312,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 205
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.8298,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 206
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.8294,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "B液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 207
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.8292,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 208
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.8287,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC11电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 209
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机温度",
+        "correlation": 0.8282,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 210
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.8275,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 211
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.8269,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 212
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.8264,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC08电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 213
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机温度",
+        "correlation": 0.826,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "注浆总累积量",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 214
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾水平偏移",
+        "correlation": 0.8251,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "盾首水平偏移",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 215
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机温度",
+        "correlation": 0.8243,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 216
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力01",
+        "correlation": -0.8156,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 217
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "开挖舱压力02",
+        "correlation": -0.8154,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.8-1",
+        "direction": "负相关",
+        "elementid": 218
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程05",
+        "correlation": 0.8102,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC16电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 219
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程06",
+        "correlation": 0.8094,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC16电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 220
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推进油缸行程07",
+        "correlation": 0.8088,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "主驱动FC16电机温度",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 221
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.8071,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量08",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 222
+      }
+    },
+    {
+      "type": "CORRELATED_HIGH",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC16电机温度",
+        "correlation": 0.8045,
+        "color": "#FE4448",
+        "level": "高关联性",
+        "start_node": "A液泵累计量01",
+        "range": "0.8-1",
+        "direction": "正相关",
+        "elementid": 223
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": 0.7985,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "贯入度",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 224
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.7939,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "俯仰角",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 225
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": -0.7936,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 226
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "工作舱压力01",
+        "correlation": 0.7912,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 227
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": 0.7911,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 228
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "推力",
+        "correlation": 0.7738,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 229
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.7632,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 230
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": 0.7627,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 231
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "俯仰角",
+        "correlation": 0.7232,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 232
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "俯仰角",
+        "correlation": 0.7209,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 233
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.705,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 234
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.7003,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 235
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.6935,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 236
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": 0.6873,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "俯仰角",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 237
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6668,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC06电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 238
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6607,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC13电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 239
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.6605,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "滚动角",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 240
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6551,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC04电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 241
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主轴承HBW油脂压力01",
+        "correlation": -0.6545,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 242
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主轴承HBW油脂压力01",
+        "correlation": -0.6542,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 243
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6471,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC07电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 244
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6447,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC10电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 245
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": -0.6399,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 246
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "滚动角",
+        "correlation": -0.6378,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动FC14电机电流",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 247
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动冷却水回水温度",
+        "correlation": -0.635,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.6-0.8",
+        "direction": "负相关",
+        "elementid": 248
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力06",
+        "correlation": 0.63,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "盾尾密封后压力04",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 249
+      }
+    },
+    {
+      "type": "CORRELATED_MEDIUM",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力17",
+        "correlation": 0.6199,
+        "color": "#FEBC41",
+        "level": "中关联性",
+        "start_node": "盾尾密封后压力15",
+        "range": "0.6-0.8",
+        "direction": "正相关",
+        "elementid": 250
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机电流",
+        "correlation": 0.6,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 251
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.5987,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 252
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC13电机电流",
+        "correlation": 0.597,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 253
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "贯入度",
+        "correlation": -0.5933,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动FC13电机电流",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 254
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC06电机电流",
+        "correlation": 0.5923,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 255
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": 0.5884,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 256
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": 0.5871,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 257
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC04电机电流",
+        "correlation": 0.5869,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 258
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC04电机电流",
+        "correlation": -0.5841,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 259
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力04",
+        "correlation": 0.5826,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾尾密封后压力02",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 260
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机电流",
+        "correlation": 0.5817,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 261
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.5816,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 262
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": 0.5802,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 263
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机电流",
+        "correlation": 0.5794,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 264
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机电流",
+        "correlation": -0.5777,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 265
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": 0.5747,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 266
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": 0.5737,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 267
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC04电机电流",
+        "correlation": 0.5719,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主轴承HBW油脂压力01",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 268
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾首垂直偏移",
+        "correlation": -0.5713,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 269
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力19",
+        "correlation": 0.5712,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾尾密封后压力17",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 270
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.5691,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 271
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC14电机电流",
+        "correlation": -0.5672,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 272
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机电流",
+        "correlation": -0.5648,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 273
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC08电机电流",
+        "correlation": -0.5499,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动冷却水回水温度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 274
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "盾尾垂直偏移",
+        "correlation": -0.5373,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "推进速度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 275
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾水平偏移",
+        "correlation": -0.5348,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "俯仰角",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 276
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾首垂直偏移",
+        "correlation": 0.5216,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾首水平偏移",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 277
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动冷却水回水温度",
+        "correlation": 0.5168,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "E组推进泵流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 278
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC12电机转速",
+        "correlation": -0.5168,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动FC10电机电流",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 279
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC07电机转速",
+        "correlation": -0.5139,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "主驱动FC08电机电流",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 280
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾垂直偏移",
+        "correlation": 0.4752,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾尾水平偏移",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 281
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力09",
+        "correlation": 0.4572,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾尾密封后压力06",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 282
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾密封后压力12",
+        "correlation": 0.4471,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "盾尾密封后压力09",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 283
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC10电机转速",
+        "correlation": 0.4471,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 284
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "主驱动FC15电机转速",
+        "correlation": 0.4471,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.4-0.6",
+        "direction": "正相关",
+        "elementid": 285
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "盾尾水平偏移",
+        "correlation": -0.4452,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "推进速度",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 286
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "盾尾水平偏移",
+        "correlation": -0.4351,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 287
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 1.0,
+        "end_node": "刀盘转速设置",
+        "correlation": -0.4339,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "A组推进泵流量",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 288
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": -0.4266,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "刀盘转速设置",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 289
+      }
+    },
+    {
+      "type": "CORRELATED_LOW",
+      "properties": {
+        "coverage": 0.9974,
+        "end_node": "推进速度",
+        "correlation": -0.4191,
+        "color": "#04A9FE",
+        "level": "低关联性",
+        "start_node": "刀盘转速",
+        "range": "0.4-0.6",
+        "direction": "负相关",
+        "elementid": 290
+      }
+    }
+  ]
+}

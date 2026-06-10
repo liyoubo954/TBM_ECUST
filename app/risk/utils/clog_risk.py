@@ -1,55 +1,84 @@
 import numpy as np
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
+
 UNIFIED_REQUIRED_PARAMS = {
-    'WorkCham.Pres.01': '工作舱压力01',
-    'ExcavCham.Pres.04': '开挖舱压力04',
-    'SlurryPump.P2.1.MudIn.Pres': '排浆泵P2.1进泥口压力'
+    'WorkCham.Prs.01': '1#工作仓压力',
+    'ExcCham.Prs.04': '4#开挖仓压力',
+    'DischPump.P2.1.In.Prs': '排浆泵P2.1进口压力'
 }
-REQUIRED_EXCAVATION_PARAMS = UNIFIED_REQUIRED_PARAMS
-CORE_PARAMS_CHINESE = {
-    'bubble_pressure': '工作舱压力01',
-    'excavation_pressure': '开挖舱压力04',
-    'pump_pressure': '排浆泵P2.1进泥口压力'
+        
+RISK_SPEC = {
+    "name": "滞排风险",
+    "risk_type_label": "滞排",
+    "full_risk_type": "滞排风险",
+    "output_key": "clog_risk",
+    "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
+    "potential_risk": "滞排预警",
+    "fields": list(UNIFIED_REQUIRED_PARAMS.keys()),
+    "map": dict(UNIFIED_REQUIRED_PARAMS),
+    "units": {
+        "1#工作仓压力": "bar",
+        "4#开挖仓压力": "bar",
+        "排浆泵P2.1进口压力": "bar",            
+    },
+    "score_points": [(0.0, 4.0), (0.3, 3.5), (0.7, 2.0), (0.9, 0.5), (1.0, 0.0)],
+    "probability_thresholds": (0.7, 0.3),
+    "fault_reason_analysis": {
+        "无风险Ⅰ": "开挖仓压力与工作仓压力稳定，排浆泵P2.1进口压力处于正常区间，压力梯度合理、流态均匀。渣土含水率与改良剂配比匹配，管路内无沉积或团聚迹象，排量连续可控。",
+        "低风险Ⅱ": "管路摩阻略增，泵出口与进口压力出现轻微非同步波动，短时排量下降提示流动性边界化。渣土可能存在剪切变稀临界、团聚核初始形成或颗粒级配偏离，需关注参数微调以避免在弯头、缩径或高阻段形成稳定堵塞核。",
+        "中风险Ⅲ": "进口压力显著抬升且泵压波动加剧，表征管内已有部分堵塞或团聚带。压力梯度异常、回流概率上升、脉动增大，局部存在沉积与再悬浮循环。根因多与改良不足、含水率不当、细粒黏性偏高或输送能级不匹配相关，需及时分段冲洗并联动调整改良与泵速以恢复连续性。",
+        "高风险Ⅳ": "系统出现严重滞排或近乎完全堵塞，泵压异常、排量骤降甚至中断，压力梯度失衡并伴随强烈脉动。继续掘进将导致设备过载、密封与管路风险叠加，存在安全与质量隐患，应尽快在安全窗口下清障并重建稳定输送条件。",
+    },
+    "measures": {
+        "无风险Ⅰ": {
+            "measures": ["维持状态：保持当前掘进参数", "正常作业：按照标准流程进行"],
+            "reason": "开挖仓压力稳定，工作仓压力正常，排浆泵压力平稳，排泥系统运行平稳，渣土含水率适宜，排泥管道通畅，刀盘转速和刀盘扭矩保持稳定，渣土排出连续顺畅。",
+        },
+        "低风险Ⅱ": {
+            "measures": ["监控压力趋势：每15分钟记录一次压力", "调整掘进参数：适当降低推进速度"],
+            "reason": "开挖舱压力略有波动，工作舱压力轻微升高，排浆泵压力小幅变化，排泥速度略有下降，刀盘扭矩略有增加，渣土含水率略有变化，但排泥系统整体运行仍在安全范围内。",
+        },
+        "中风险Ⅲ": {
+            "measures": ["加强密封监控：将密封压力监测频率提高到每30分钟一次", "检查压力梯度：详细分析各道密封之间的压力梯度"],
+            "reason": "开挖仓压力不稳定，工作仓压力明显升高，排浆泵压力波动较大，排泥速度明显下降，刀盘扭矩波动明显，渣土含水率异常。",
+        },
+        "高风险Ⅳ": {
+            "measures": ["立即停机：停止掘进作业", "检查压力系统：全面检查气垫舱压力"],
+            "reason": "开挖仓压力异常，工作舱压力过高，排浆泵压力急剧变化，刀盘扭矩急剧上升，排泥系统出现明显阻塞，渣土几乎无法排出。",
+        },
+    },
 }
-def map_project_data(data: Dict[str, Any]) -> Dict[str, float]:
-    mapped_data = {
-        'bubble_pressure': data.get('WorkCham.Pres.01', 0),
-        'excavation_pressure': data.get('ExcavCham.Pres.04', 0),
-        'pump_pressure': data.get('SlurryPump.P2.1.MudIn.Pres', 0)
-    }
-    for key, value in mapped_data.items():
-        if not isinstance(value, (int, float)) or np.isnan(value):
-            mapped_data[key] = 0.0
-        else:
-            mapped_data[key] = float(value)
-    return mapped_data
-def is_sensor_detected(data: Dict[str, Any], sensor_key: str) -> bool:
-    if sensor_key not in data:
-        return False
-    value = data[sensor_key]
+
+
+def to_valid_float(value: Any) -> float:
+    try:
+        if value is None:
+            return 0.0
+        value = float(value)
+        if np.isnan(value) or np.isinf(value):
+            return 0.0
+        return value
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def is_valid_sensor_value(value: Any) -> bool:
     if value is None:
         return False
     if isinstance(value, (int, float)):
         return not np.isnan(value)
     return False
-def validate_sensor_data(data: Dict[str, Any], required_sensors: List[str]) -> Dict[str, bool]:
-    validation_results = {}
-    for sensor in required_sensors:
-        validation_results[sensor] = is_sensor_detected(data, sensor)
-    return validation_results
- 
-def calculate_universal_clog_risk(data: Dict[str, Any], shield_id: str = None) -> Dict[str, Any]:
+
+
+def calculate_universal_clog_risk(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        # 严格校验必要字段
-        validations = validate_sensor_data(data, list(UNIFIED_REQUIRED_PARAMS.keys()))
-        if not all(validations.values()):
-            missing = [k for k, ok in validations.items() if not ok]
+        missing = [k for k in UNIFIED_REQUIRED_PARAMS if not is_valid_sensor_value(data.get(k))]
+        if missing:
             raise ValueError(f"滞排风险计算缺少必要字段: {', '.join(missing)}")
 
-        mapped_data = map_project_data(data)
-        P_bubble = mapped_data['bubble_pressure']      # 工作舱压力01
-        P_excav = mapped_data['excavation_pressure']   # 开挖舱压力04
-        P_pump = mapped_data['pump_pressure']          # 排浆泵进泥口压力
+        P_bubble = to_valid_float(data.get('WorkCham.Prs.01'))
+        P_excav = to_valid_float(data.get('ExcCham.Prs.04'))
+        P_pump = to_valid_float(data.get('DischPump.P2.1.In.Prs'))
 
         diff_bubble_exc = P_bubble - P_excav
         diff_bubble_pump = P_bubble - P_pump
@@ -74,74 +103,3 @@ def calculate_universal_clog_risk(data: Dict[str, Any], shield_id: str = None) -
         }
     except Exception as e:
         raise RuntimeError(f"滞排风险评估失败: {str(e)}")
-
-
-
-
-
-def risk_metadata() -> Dict[str, Any]:
-    return {
-        "name": "滞排风险",
-        "fields": ["WorkCham.Pres.01", "ExcavCham.Pres.04", "SlurryPump.P2.1.MudIn.Pres"],
-        "map": {
-            "WorkCham.Pres.01": "工作舱压力01",
-            "ExcavCham.Pres.04": "开挖舱压力04",
-            "SlurryPump.P2.1.MudIn.Pres": "排浆泵P2.1进泥口压力",
-        },
-        "units": {
-            "工作舱压力01": "bar",
-            "开挖舱压力04": "bar",
-            "排浆泵P2.1进泥口压力": "bar",
-        },
-    }
-
-
-def get_measures_and_reason(risk_level: str):
-    mapping = {
-        "无风险Ⅰ": {
-            "measures": ["维持状态：保持当前掘进参数", "正常作业：按照标准流程进行"],
-            "reason": "开挖舱压力稳定，工作舱压力正常，排浆泵压力平稳，排泥系统运行平稳，渣土含水率适宜，排泥管道通畅，刀盘转速和刀盘扭矩保持稳定，渣土排出连续顺畅。"
-        },
-        "低风险Ⅱ": {
-            "measures": ["监控压力趋势：每15分钟记录一次压力", "调整掘进参数：适当降低推进速度"],
-            "reason": "开挖舱压力略有波动，工作舱压力轻微升高，排浆泵压力小幅变化，排泥速度略有下降，刀盘扭矩略有增加，渣土含水率略有变化，但排泥系统整体运行仍在安全范围内。"
-        },
-        "中风险Ⅲ": {
-            "measures": ["加强密封监控：将密封压力监测频率提高到每30分钟一次", "检查压力梯度：详细分析各道密封之间的压力梯度"],
-            "reason": "开挖舱压力不稳定，工作舱压力明显升高，排浆泵压力波动较大，排泥速度明显下降，刀盘扭矩波动明显，渣土含水率异常。"
-        },
-        "高风险Ⅳ": {
-            "measures": ["立即停机：停止掘进作业", "检查压力系统：全面检查气垫舱压力"],
-            "reason": "开挖舱压力异常，工作舱压力过高，排浆泵压力急剧变化，刀盘扭矩急剧上升，排泥系统出现明显阻塞，渣土几乎无法排出。"
-        }
-    }
-    d = mapping.get(risk_level)
-    return (d.get("measures", []), d.get("reason", "")) if d else ([], "")
-
-
-def probability_to_score(probability: float) -> float:
-    p = float(probability or 0.0)
-    if p >= 0.9:
-        return 0.5 - (p - 0.9) * 0.5 / 0.1
-    elif p >= 0.7:
-        return 2 - (p - 0.7) * 1.5 / (0.9 - 0.7)
-    elif p >= 0.3:
-        return 3.5 - (p - 0.3) * 1.5 / (0.7 - 0.3)
-    else:
-        return 4.0 - p * 0.5 / 0.3
-
-
-def reverse_score_to_probability(score: float) -> float:
-    s = float(score or 0.0)
-    if s <= 0.5:
-        return 0.9 + (0.5 - s) * 0.2
-    elif s <= 2:
-        return 0.7 + (2 - s) * (0.2 / 1.5)
-    elif s <= 3.5:
-        return 0.3 + (3.5 - s) * (0.4 / 1.5)
-    else:
-        return (4.0 - s) * 0.6
-
-
-def probability_thresholds():
-    return 0.7, 0.3

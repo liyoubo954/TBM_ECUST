@@ -1,0 +1,22 @@
+{
+  "stratum_label": "3",
+  "feature_count": 16,
+  "feature_dim": 768,
+  "sequence_length": 6,
+  "rings_per_sequence": 6,
+  "window_points": 48,
+  "window_stride": 8,
+  "sequence_stride": 1,
+  "train_sequences": 8782,
+  "val_sequences": 1265,
+  "test_sequences": 1819,
+  "test_no_risk_rate": 0.9846069268829027,
+  "test_low_rate": 0.013743815283122594,
+  "test_medium_rate": 0.0016492578339747114,
+  "test_high_rate": 0.0,
+  "test_medium_high_rate": 0.0016492578339747114,
+  "test_high_rate_only": 0.0,
+  "threshold_low": 0.6691250080216625,
+  "threshold_medium": 0.906089660504532,
+  "threshold_high": 0.9685247098077441
+}

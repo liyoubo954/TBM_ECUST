@@ -1,28 +1,89 @@
 from flask import Blueprint, request, jsonify
 from influxdb import InfluxDBClient
-from app.risk.utils.clog_risk import calculate_universal_clog_risk as calculate_clog_risk, risk_metadata as clog_risk_metadata
-from app.risk.utils.mdr_seal_risk import calculate_mdr_seal_risk, risk_metadata as mdr_risk_metadata
-from app.risk.utils.tail_seal_risk import calculate_tail_seal_risk, risk_metadata as tail_risk_metadata
-from app.risk.utils.mud_cake_risk import MudCakeRiskCalculator, MODEL_FEATURE_MAP, risk_metadata as mud_cake_risk_metadata
+from app.risk.utils.clog_risk import (
+    RISK_SPEC as CLOG_RISK_SPEC,
+    calculate_universal_clog_risk as calculate_clog_risk,
+)
+from app.risk.utils.mdr_seal_risk import (
+    RISK_SPEC as MDR_SEAL_RISK_SPEC,
+    calculate_universal_mdr_seal_risk as calculate_mdr_seal_risk,
+)
+from app.risk.utils.tail_seal_risk import (
+    RISK_SPEC as TAIL_SEAL_RISK_SPEC,
+    calculate_universal_tail_seal_risk as calculate_tail_seal_risk,
+)
+from app.risk.utils.mud_cake_risk import (
+    GEO_FEATURES,
+    TBM_FEATURES,
+    RISK_SPEC as MUD_CAKE_RISK_SPEC,
+    MudCakeRiskCalculator,
+    StratumMudCakeRiskCalculator,
+)
 import traceback
 import os
 import json
+import hashlib
+import random
+import re
+import time
 import pandas as pd
 from datetime import datetime, timedelta
 import pymysql
 import threading
 import queue
+import atexit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+class Config(object):
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sf9glGVa20pyM1NtdukZ'
+
+    PROJECT_CODE = os.environ.get("PROJECT_CODE", "TSJY_DZ1360")
+    INFLUXDB_HOST = os.environ.get('INFLUXDB_HOST') or '192.168.211.108'
+    INFLUXDB_PORT = _env_int('INFLUXDB_PORT', 38086)
+    INFLUXDB_USERNAME = os.environ.get('INFLUXDB_USERNAME') or 'admin'
+    INFLUXDB_PASSWORD = os.environ.get('INFLUXDB_PASSWORD') or 'FZaStb0cXFuFbehPBM6YHCiuAAX6QIXr'
+    INFLUXDB_DATABASE = os.environ.get('INFLUXDB_DATABASE') or 'algorithm'
+    INFLUXDB_MEASUREMENT = os.environ.get('INFLUXDB_MEASUREMENT') or 'tsjy_dz1360_riskwarning'
+    INFLUXDB_TIMEOUT = _env_int('INFLUXDB_TIMEOUT', 10)
+
+    MYSQL_HOST = os.environ.get("MYSQL_HOST", "172.16.105.12")
+    MYSQL_PORT = _env_int("MYSQL_PORT", 13366)
+    MYSQL_USER = os.environ.get("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "123456")
+    MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "algorithm")
+    MYSQL_READ_TIMEOUT = _env_int("MYSQL_READ_TIMEOUT", 8)
+    MYSQL_WRITE_TIMEOUT = _env_int("MYSQL_WRITE_TIMEOUT", 8)
+    MYSQL_MAX_EXECUTION_MS = _env_int("MYSQL_MAX_EXECUTION_MS", 3000)
+
+    POINT_INFO_MYSQL_HOST = os.environ.get("POINT_INFO_MYSQL_HOST", MYSQL_HOST)
+    POINT_INFO_MYSQL_PORT = _env_int("POINT_INFO_MYSQL_PORT", MYSQL_PORT)
+    POINT_INFO_MYSQL_USER = os.environ.get("POINT_INFO_MYSQL_USER", MYSQL_USER)
+    POINT_INFO_MYSQL_PASSWORD = os.environ.get("POINT_INFO_MYSQL_PASSWORD", MYSQL_PASSWORD)
+    POINT_INFO_MYSQL_DATABASE = os.environ.get("POINT_INFO_MYSQL_DATABASE", "point_info")
+
+    HISTORY_TARGET_DB_NAME = os.environ.get("HISTORY_TARGET_DB_NAME", "tsjy_dz1360_cleanDate")
+    HISTORY_PROJECT_PREFIX = os.environ.get("HISTORY_PROJECT_PREFIX", "tsjy_dz1360")
+    LATEST_STATE_TARGET_DB = os.environ.get("LATEST_STATE_TARGET_DB", "tsjy_dz1360_map")
+
+
 CONSECUTIVE_TRIGGER_N = int(os.environ.get('CONSECUTIVE_TRIGGER_N', '3'))
-PROJECT_NAME = os.environ.get("PROJECT_NAME", "通苏嘉甬")
-INFLUXDB_HOST = os.environ.get('INFLUXDB_HOST') or '192.168.211.108'
-INFLUXDB_PORT = int(os.environ.get('INFLUXDB_PORT') or 38086)
-INFLUXDB_USERNAME = os.environ.get('INFLUXDB_USERNAME') or 'admin'
-INFLUXDB_PASSWORD = os.environ.get('INFLUXDB_PASSWORD') or 'FZaStb0cXFuFbehPBM6YHCiuAAX6QIXr'
-INFLUXDB_DATABASE = os.environ.get('INFLUXDB_DATABASE') or 'algorithm'
-INFLUXDB_MEASUREMENT = os.environ.get('INFLUXDB_MEASUREMENT') or 'tsjy_dz1360_riskwarning'
-INFLUXDB_TIMEOUT = int(os.environ.get('INFLUXDB_TIMEOUT') or 10)
+MUD_CAKE_SEQUENCE_RING_COUNT = 6
+PROJECT_CODE = Config.PROJECT_CODE
+INFLUXDB_HOST = Config.INFLUXDB_HOST
+INFLUXDB_PORT = Config.INFLUXDB_PORT
+INFLUXDB_USERNAME = Config.INFLUXDB_USERNAME
+INFLUXDB_PASSWORD = Config.INFLUXDB_PASSWORD
+INFLUXDB_DATABASE = Config.INFLUXDB_DATABASE
+INFLUXDB_MEASUREMENT = Config.INFLUXDB_MEASUREMENT
+INFLUXDB_TIMEOUT = Config.INFLUXDB_TIMEOUT
 client = InfluxDBClient(
     host=INFLUXDB_HOST,
     port=INFLUXDB_PORT,
@@ -33,28 +94,76 @@ client = InfluxDBClient(
 )
 
 SHIELD_CONFIG = {
-    "tsjy_dz1360": {"measurement": "tsjy_dz1360_riskwarning", "project_name": "通苏嘉甬"},
-    "htcjsd_dz1368": {"measurement": "htcjsd_dz1368_riskwarning", "project_name": "海太长江隧道"},
-    "yztl_dz1266": {"measurement": "yztl_dz1266_riskwarning", "project_name": "甬舟铁路"},
+    "tsjy_dz1360": {"measurement": "tsjy_dz1360_riskwarning", "project_code": "TSJY_DZ1360"},
+    "yztl_dz1266": {"measurement": "yztl_dz1266_riskwarning", "project_code": "YZTL_DZ1266"},
+    "sjtl_dl898": {"measurement": "sjtl_dl898_riskwarning", "project_code": "SJTL_DL898"},
 }
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def _quote_influx_identifier(identifier):
+    text = str(identifier or "").strip()
+    if not text:
+        raise ValueError("InfluxDB identifier cannot be empty")
+    if any(ch in text for ch in ('"', "\\", "\x00", "\n", "\r")):
+        raise ValueError(f"Unsafe InfluxDB identifier: {text}")
+    return f'"{text}"'
+
+
+def _quote_mysql_identifier(identifier):
+    text = str(identifier or "").strip()
+    if not _IDENTIFIER_RE.fullmatch(text):
+        raise ValueError(f"Unsafe MySQL identifier: {text}")
+    return f"`{text}`"
+
 
 def _resolve_shield_context(shield_id: str):
     try:
-        sid = str(shield_id).strip() if shield_id else None
+        sid = str(shield_id or "").strip()
+        if sid and not _IDENTIFIER_RE.fullmatch(sid):
+            sid = ""
         if sid and sid in SHIELD_CONFIG:
-            return SHIELD_CONFIG[sid]["measurement"], SHIELD_CONFIG[sid]["project_name"]
+            return SHIELD_CONFIG[sid]["measurement"], SHIELD_CONFIG[sid]["project_code"]
         if sid:
-            return f"{sid}_riskwarning", PROJECT_NAME
-        return INFLUXDB_MEASUREMENT, PROJECT_NAME
+            return f"{sid}_riskwarning", sid.upper()
+        return INFLUXDB_MEASUREMENT, PROJECT_CODE
     except Exception:
-        return INFLUXDB_MEASUREMENT, PROJECT_NAME
+        return INFLUXDB_MEASUREMENT, PROJECT_CODE
+
 
 POINT_MAP_CACHE = {}
+GEO_SOURCE_RING_CACHE = None
+RISK_DIR = os.path.dirname(os.path.abspath(__file__))
+GEO_CLUSTER_CSV = os.environ.get(
+    "GEO_CLUSTER_CSV",
+    os.path.join(RISK_DIR, "合并数据_环号聚类结果_按环聚合_K6.csv"),
+)
+
+SOURCE_FILE_ALIASES = {
+    "tsjy_dz1360": "通苏嘉甬处理后的数据",
+    "TSJY_DZ1360": "通苏嘉甬处理后的数据",
+    "通苏嘉甬": "通苏嘉甬处理后的数据",
+    "yztl_dz1266": "甬舟铁路处理后的数据",
+    "YZTL_DZ1266": "甬舟铁路处理后的数据",
+    "甬舟铁路": "甬舟铁路处理后的数据",
+    "甬舟": "甬舟铁路处理后的数据",
+    "sjtl_dl898": "深江铁路处理后的数据",
+    "SJTL_DL898": "深江铁路处理后的数据",
+    "深江铁路": "深江铁路处理后的数据",
+}
 RISK_CONFIG = {
-    "clog_risk": clog_risk_metadata(),
-    "mdr_seal_risk": mdr_risk_metadata(),
-    "tail_seal_risk": tail_risk_metadata(),
-    "mud_cake_risk": mud_cake_risk_metadata(),
+    "clog_risk": CLOG_RISK_SPEC,
+    "mdr_seal_risk": MDR_SEAL_RISK_SPEC,
+    "tail_seal_risk": TAIL_SEAL_RISK_SPEC,
+    "mud_cake_risk": MUD_CAKE_RISK_SPEC,
+}
+
+RISK_DISPLAY_FIELDS = {
+    "mud_cake_risk": list(TBM_FEATURES),
+    "clog_risk": list(CLOG_RISK_SPEC["fields"]),
+    "mdr_seal_risk": list(MDR_SEAL_RISK_SPEC["fields"]),
+    "tail_seal_risk": list(TAIL_SEAL_RISK_SPEC["fields"]),
 }
 
 RISK_TABLES = {
@@ -65,34 +174,403 @@ RISK_TABLES = {
 }
 
 
-def _find_earliest_warning(original_ring_data, assessor_func, consecutive_n, fields):
-    earliest_time_raw = None
-    earliest_params = None
-    consec = 0
-    start_time = None
-    start_params = None
+def _risk_table_from_query(default_risk_type="结泥饼风险"):
+    risk_type = request.args.get("risk_type") or default_risk_type
+    risk_type = str(risk_type).strip()
+    risk_key = risk_type[:-2] if risk_type.endswith("风险") else risk_type
+    return risk_key, RISK_TABLES.get(risk_key)
 
-    for point in original_ring_data:
-        if isinstance(point, dict):
+
+RISK_OUTPUT_SPECS = {
+    key: {
+        "output_key": spec["output_key"],
+        "risk_type_label": spec["risk_type_label"],
+        "full_risk_type": spec["full_risk_type"],
+        "fault_cause": spec["fault_cause"],
+    }
+    for key, spec in RISK_CONFIG.items()
+}
+
+WARNING_LEVELS = {"低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ"}
+LATEST_RISK_ROW_COLUMNS = [
+    "ring",
+    "project_code",
+    "key_parameters",
+    "safety_level",
+    "risk_level",
+    "risk_score",
+    "potential_risk",
+    "fault_reason_analysis",
+    "fault_cause",
+    "fault_measures",
+    "measures",
+    "impact_parameters",
+]
+
+_TTL_CACHE_LOCK = threading.Lock()
+_TTL_CACHES = {
+    "risk_level_result": {},
+    "mysql_latest_row": {},
+    "mysql_table_columns": {},
+    "point_info_tables": {},
+    "history_parameters": {},
+    "latest_state": {},
+}
+
+
+def _ttl_cache_get(cache_name: str, key):
+    now = time.time()
+    with _TTL_CACHE_LOCK:
+        cache = _TTL_CACHES.get(cache_name) or {}
+        item = cache.get(key)
+        if not item:
+            return None
+        exp, value = item
+        if exp is not None and exp < now:
+            cache.pop(key, None)
+            return None
+        return value
+
+
+def _ttl_cache_set(cache_name: str, key, value, ttl_sec: float, max_items: int = 1024):
+    try:
+        ttl = float(ttl_sec or 0.0)
+    except Exception:
+        ttl = 0.0
+    exp = (time.time() + ttl) if ttl > 0 else None
+    with _TTL_CACHE_LOCK:
+        cache = _TTL_CACHES.get(cache_name)
+        if cache is None:
+            cache = {}
+            _TTL_CACHES[cache_name] = cache
+        if max_items and len(cache) >= int(max_items):
+            cache.clear()
+        cache[key] = (exp, value)
+    return value
+
+
+def _risk_config_by_type(risk_type):
+    for config in RISK_CONFIG.values():
+        if risk_type in {
+            config.get("name"),
+            config.get("risk_type_label"),
+            config.get("full_risk_type"),
+        }:
+            return config
+    return None
+
+
+def _interpolate_score_from_probability(probability, score_points):
+    p = max(0.0, min(1.0, float(probability or 0.0)))
+    points = sorted(score_points, key=lambda item: item[0])
+    if p <= points[0][0]:
+        return float(points[0][1])
+    if p >= points[-1][0]:
+        return float(points[-1][1])
+    for (p0, s0), (p1, s1) in zip(points, points[1:]):
+        if p0 <= p <= p1:
+            ratio = (p - p0) / max(p1 - p0, 1e-9)
+            return float(s0 + ratio * (s1 - s0))
+    return float(points[-1][1])
+
+
+def _interpolate_probability_from_score(score, score_points):
+    s = max(0.0, min(4.0, float(score or 0.0)))
+    points = sorted(score_points, key=lambda item: item[0])
+    if s >= points[0][1]:
+        return float(points[0][0])
+    if s <= points[-1][1]:
+        return float(points[-1][0])
+    for (p0, s0), (p1, s1) in zip(points, points[1:]):
+        upper, lower = max(s0, s1), min(s0, s1)
+        if lower <= s <= upper:
+            ratio = (s - s0) / (s1 - s0) if abs(s1 - s0) > 1e-9 else 0.0
+            return float(p0 + ratio * (p1 - p0))
+    return 0.0
+
+
+def _stable_uniform_0_upper(seed_key: str, upper: float) -> float:
+    try:
+        u = max(0.0, float(upper or 0.0))
+        if u <= 0.0:
+            return 0.0
+        digest = hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()
+        seed = int(digest[:8], 16)
+        rng = random.Random(seed)
+        return float(rng.uniform(0.0, u))
+    except Exception:
+        return 0.0
+
+
+def _measures_and_reason(risk_level, risk_type):
+    config = _risk_config_by_type(risk_type)
+    item = (config or {}).get("measures", {}).get(risk_level, {})
+    return item.get("measures", []), item.get("reason", "")
+
+
+def _read_csv_with_fallback(path, **kwargs):
+    last_error = None
+    for enc in ("utf-8-sig", "utf-8", "gbk", "gb18030"):
+        try:
+            return pd.read_csv(path, encoding=enc, **kwargs)
+        except Exception as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    return pd.read_csv(path, **kwargs)
+
+
+def _source_key(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _source_candidates(shield_id=None, project_code=None, request_data=None):
+    candidates = []
+    for value in (
+            shield_id,
+            project_code,
+            (request_data or {}).get("project_code") if isinstance(request_data, dict) else None,
+            (request_data or {}).get("project") if isinstance(request_data, dict) else None,
+            (request_data or {}).get("source_file") if isinstance(request_data, dict) else None,
+            (request_data or {}).get("Source_File") if isinstance(request_data, dict) else None,
+    ):
+        key = _source_key(value)
+        if not key:
+            continue
+        candidates.append(key)
+        alias = SOURCE_FILE_ALIASES.get(key)
+        if alias:
+            candidates.append(alias)
+    deduped = []
+    seen = set()
+    for value in candidates:
+        if value not in seen:
+            deduped.append(value)
+            seen.add(value)
+    return deduped
+
+
+def _load_project_geo_ring_cache():
+    global GEO_SOURCE_RING_CACHE
+    if GEO_SOURCE_RING_CACHE is not None:
+        return GEO_SOURCE_RING_CACHE
+    cache = {}
+    path = GEO_CLUSTER_CSV
+    if not path or not os.path.isfile(path):
+        GEO_SOURCE_RING_CACHE = cache
+        return GEO_SOURCE_RING_CACHE
+    try:
+        df = _read_csv_with_fallback(path)
+        if "Ring_Index" not in df.columns and "Ring.No" in df.columns:
+            df = df.rename(columns={"Ring.No": "Ring_Index"})
+        if "Source_File" not in df.columns or "Ring_Index" not in df.columns:
+            GEO_SOURCE_RING_CACHE = cache
+            return GEO_SOURCE_RING_CACHE
+        keep = ["Source_File", "Ring_Index"]
+        if "Cluster_Label" in df.columns:
+            keep.append("Cluster_Label")
+        keep.extend([feature for feature in GEO_FEATURES if feature in df.columns and feature not in keep])
+        df = df[keep].copy()
+        df["Ring_Index"] = pd.to_numeric(df["Ring_Index"], errors="coerce")
+        df = df.dropna(subset=["Ring_Index"]).copy()
+        df["Ring_Index"] = df["Ring_Index"].astype(int)
+        for _, row in df.iterrows():
+            source = _source_key(row.get("Source_File"))
+            if not source:
+                continue
+            ring = int(row["Ring_Index"])
+            item = {"Source_File": source, "Ring.No": ring}
+            if "Cluster_Label" in row and not pd.isna(row.get("Cluster_Label")):
+                try:
+                    item["Cluster_Label"] = int(float(row.get("Cluster_Label")))
+                except Exception:
+                    item["Cluster_Label"] = row.get("Cluster_Label")
+            for feature in GEO_FEATURES:
+                if feature in row and not pd.isna(row.get(feature)):
+                    item[feature] = row.get(feature)
+            cache.setdefault(source, {})[ring] = item
+    except Exception:
+        traceback.print_exc()
+    GEO_SOURCE_RING_CACHE = cache
+    return GEO_SOURCE_RING_CACHE
+
+
+def _lookup_project_geo(ring, source_candidates):
+    try:
+        ring = int(float(ring))
+    except Exception:
+        return {}
+    cache = _load_project_geo_ring_cache()
+    for source in source_candidates or []:
+        source = _source_key(source)
+        if not source:
+            continue
+        direct = cache.get(source, {}).get(ring)
+        if direct:
+            return direct
+        alias = SOURCE_FILE_ALIASES.get(source)
+        if alias:
+            direct = cache.get(alias, {}).get(ring)
+            if direct:
+                return direct
+    return {}
+
+
+def _with_current_ring_cluster(points, geo):
+    if not geo or not isinstance(points, list) or not points:
+        return points
+    cluster = geo.get("Cluster_Label")
+    if cluster in (None, "", "-"):
+        return points
+    enriched = list(points)
+    last = enriched[-1]
+    if isinstance(last, dict):
+        item = dict(last)
+        if item.get("Cluster_Label") in (None, "", "-"):
+            item["Cluster_Label"] = cluster
+        enriched[-1] = item
+    return enriched
+
+
+def _enrich_points_with_geo(points, source_candidates=None):
+    if not source_candidates:
+        return points
+    if not isinstance(points, list):
+        return points
+    enriched = []
+    geo_by_ring = {}
+    for point in points:
+        if not isinstance(point, dict):
+            enriched.append(point)
+            continue
+        item = dict(point)
+        ring_val = item.get("Ring.No", item.get("RING", item.get("ring")))
+        try:
+            ring = int(float(ring_val))
+        except Exception:
+            enriched.append(item)
+            continue
+        if ring not in geo_by_ring:
+            geo_by_ring[ring] = _lookup_project_geo(ring, source_candidates)
+        geo = geo_by_ring.get(ring) or {}
+        for feature, value in geo.items():
+            if feature in ("Ring.No", "Source_File"):
+                continue
+            if item.get(feature) in (None, "", "-"):
+                item[feature] = value
+        enriched.append(item)
+    return enriched
+
+
+def _require_json(required_fields):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, jsonify({"status": "error", "error": "请求体必须为有效的 JSON 对象"}), 400
+    for field, err_msg in required_fields:
+        if not data.get(field):
+            return None, jsonify({"status": "error", "error": err_msg}), 400
+    return data, None, None
+
+
+
+def _build_select_clause(fields):
+    if not isinstance(fields, (list, tuple)):
+        return "*"
+    safe_fields = [field.strip() for field in fields if isinstance(field, str) and field.strip()]
+    return ", ".join([_quote_influx_identifier(field) for field in safe_fields]) if safe_fields else "*"
+
+
+def _risk_query_fields():
+    cached = _ttl_cache_get("risk_level_result", "__risk_query_fields__")
+    if cached:
+        return list(cached)
+    fields = set()
+    for cfg in RISK_CONFIG.values():
+        for field in cfg.get("fields", []) or []:
+            fields.add(field)
+    fields.update({"state", "Ring.No", "Cluster_Label"})
+    out = sorted(fields)
+    _ttl_cache_set("risk_level_result", "__risk_query_fields__", out, ttl_sec=3600.0, max_items=16)
+    return out
+
+
+def _risk_display_fields(risk_config_key):
+    fields = RISK_DISPLAY_FIELDS.get(risk_config_key)
+    if fields:
+        return list(fields)
+    return list(RISK_CONFIG.get(risk_config_key, {}).get("fields", []) or [])
+
+
+def _risk_display_impact(risk_config_key):
+    cache_key = ("impact", risk_config_key)
+    cached = _ttl_cache_get("risk_level_result", cache_key)
+    if cached is not None:
+        return cached
+    config = RISK_CONFIG[risk_config_key]
+    value = "，".join([config["map"].get(k, k) for k in _risk_display_fields(risk_config_key)])
+    _ttl_cache_set("risk_level_result", cache_key, value, ttl_sec=3600.0, max_items=64)
+    return value
+
+
+def _dedupe_points_by_time(points):
+    seen = set()
+    unique_points = []
+    for point in points or []:
+        point_time = point.get("time")
+        if point_time in seen:
+            continue
+        seen.add(point_time)
+        unique_points.append(point)
+    unique_points.sort(key=lambda x: x.get("time"))
+    return unique_points
+
+
+def _parse_ring_number(value):
+    try:
+        return float(value), None, None
+    except (ValueError, TypeError):
+        return None, jsonify({
+            "status": "error",
+            "message": f"环号参数格式错误: {value}"
+        }), 400
+
+
+def _normalize_limit(value, default, maximum):
+    try:
+        limit = int(value)
+    except Exception:
+        limit = default
+    if limit <= 0:
+        return default
+    return min(limit, maximum)
+
+
+def _find_earliest_warning_from_point_results(point_results, consecutive_n):
+    try:
+        consec = 0
+        start_time = None
+        start_params = None
+        for r in point_results or []:
             try:
-                risk_point = assessor_func(point)
-                level = risk_point.get("risk_level")
+                level = r.get("risk_level")
                 if level in ["低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ"]:
                     if consec == 0:
-                        start_time = point.get("time") or "-"
-                        start_params = {k: point.get(k) for k in fields}
+                        start_time = r.get("_time") or "-"
+                        start_params = r.get("_params") or None
                     consec += 1
                     if consec >= consecutive_n:
-                        earliest_time_raw = start_time
-                        earliest_params = start_params
-                        break
+                        return start_time, start_params
                 else:
                     consec = 0
                     start_time = None
                     start_params = None
             except Exception:
-                pass
-    return earliest_time_raw, earliest_params
+                continue
+    except Exception:
+        pass
+    return None, None
 
 
 class RiskAssessor:
@@ -103,16 +581,27 @@ class RiskAssessor:
         self._init_mud_cake_calculator()
 
     def _init_mud_cake_calculator(self):
+        stratum_root = os.path.join(self.model_dir, "mud_cake_by_stratum")
+        if os.path.isdir(stratum_root):
+            calculator = StratumMudCakeRiskCalculator(model_root=stratum_root)
+            if calculator.calculators:
+                self.mud_cake_calculator = calculator
+                return
+
         required_files = [
-            'mud_cake_autoencoder.h5',
             'mud_cake_isolation_forest.pkl',
             'mud_cake_model_info.json',
             'mud_cake_scalers.pkl'
         ]
-        missing_files = []
-        for file in required_files:
-            if not os.path.exists(os.path.join(self.model_dir, file)):
-                missing_files.append(file)
+        missing_files = [
+            file for file in required_files
+            if not os.path.exists(os.path.join(self.model_dir, file))
+        ]
+        if not (
+                os.path.exists(os.path.join(self.model_dir, 'mud_cake_autoencoder.weights.h5'))
+                or os.path.exists(os.path.join(self.model_dir, 'mud_cake_autoencoder.h5'))
+        ):
+            missing_files.append('mud_cake_autoencoder.weights.h5')
 
         if missing_files:
             self.mud_cake_calculator = None
@@ -122,20 +611,32 @@ class RiskAssessor:
     def _format_mud_cake_point(self, point):
         property_dict = {}
         try:
-            feature_list = []
-            if self.mud_cake_calculator and getattr(self.mud_cake_calculator, 'model_info', None):
-                tf = self.mud_cake_calculator.model_info.get('training_features', {})
-                feature_list = tf.get('available_features', self.mud_cake_calculator.model_info.get('all_features', []))
+            feature_list = list(getattr(self.mud_cake_calculator, 'all_features', []) or [])
+            if not feature_list and self.mud_cake_calculator and hasattr(self.mud_cake_calculator, 'detector'):
+                feature_list = list(getattr(self.mud_cake_calculator.detector, 'all_features', []) or [])
             if not feature_list:
-                feature_list = ['TJSD', 'TJL', 'DP_SD', 'DP_ZJ', 'DP_SS_ZTL']
+                feature_list = [
+                    'Thrust.Spd',
+                    'Thrust.Force',
+                    'CH.Spd',
+                    'CH.Torque',
+                    'CH.Tot.ContactForce',
+                    'Cluster_Label',
+                ]
         except Exception:
-            feature_list = ['TJSD', 'TJL', 'DP_SD', 'DP_ZJ', 'DP_SS_ZTL']
+            feature_list = [
+                'Thrust.Spd',
+                'Thrust.Force',
+                'CH.Spd',
+                'CH.Torque',
+                'CH.Tot.ContactForce',
+                'Cluster_Label',
+            ]
 
         for field in feature_list:
             if field in ('RING', 'state'):
                 continue
-            source_key = MODEL_FEATURE_MAP.get(field, field)
-            val = point.get(source_key)
+            val = point.get(field)
             try:
                 if val is not None and val != '' and not pd.isna(val):
                     property_dict[field] = float(val)
@@ -143,50 +644,112 @@ class RiskAssessor:
                     property_dict[field] = 0.0
             except Exception:
                 property_dict[field] = 0.0
+        if "Cluster_Label" not in property_dict and point.get("Cluster_Label") not in (None, "", "-"):
+            try:
+                property_dict["Cluster_Label"] = float(point.get("Cluster_Label"))
+            except Exception:
+                property_dict["Cluster_Label"] = point.get("Cluster_Label")
 
         formatted = {
             'property': property_dict,
             'state': point.get('state', 1),
             'timestamp': point.get('ts(Asia/Shanghai)', point.get('time', '')),
-            'ring': point.get('Ring.No', point.get('RING', 0))
+            'ring': point.get('Ring.No', point.get('RING', 0)),
+            'Cluster_Label': property_dict.get("Cluster_Label"),
         }
         return formatted
 
     def assess_mud_cake_risk_sequence(self, ring_points):
-        try:
-            if self.mud_cake_calculator is None:
-                raise Exception("结泥饼风险计算器不可用")
-            # 使用整环序列进行滑窗评估（步长=1，覆盖整环所有2环窗口）
-            points = [p for p in ring_points if isinstance(p, dict)]
-            points.sort(key=lambda x: x.get('time'))
-            sequence = [self._format_mud_cake_point(p) for p in points]
-            if not sequence:
-                raise Exception("当前环缺少有效数据用于序列评估")
-            result = self.mud_cake_calculator.calculate_ring_risk_sequence(sequence)
-            probability = 0.0
-            risk_level_direct = '无风险'
-            if isinstance(result, dict) and result.get('status') == 'success':
-                probability = float(result.get('combined_risk', 0.0))
-                risk_level_direct = result.get('risk_level', '无风险')
-            else:
-                raise RuntimeError(f"结泥饼模型评估失败: {result.get('message', 'unknown error')}")
-            mapped_score = self.map_probability_to_score(probability, "结泥饼风险")
-            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, "结泥饼风险")
-            return {
-                "risk_type": "结泥饼风险",
-                "risk_level": risk_level,
-                "risk_level_model": risk_level_direct,
-                "risk_score": round(mapped_score, 2),
-                "probability": round(probability, 2),
-                "measures": measures,
-                "reason": reason,
-                "potential_risk": potential_risk,
-                "earliest_time": result.get('earliest_time', ''),
-            }
-        except Exception as e:
-            raise
+        if self.mud_cake_calculator is None:
+            return self._fallback_no_risk_for_missing_fields(
+                {},
+                "结泥饼风险",
+                ["Cluster_Label"] + list(TBM_FEATURES),
+            )
+        points = [p for p in ring_points if isinstance(p, dict)]
+        points.sort(key=lambda x: x.get('time'))
+        if not points:
+            return self._fallback_no_risk_for_missing_fields(
+                {},
+                "结泥饼风险",
+                ["Cluster_Label"] + list(TBM_FEATURES),
+            )
 
-    # 移除冗余：最早预警时间由序列评估直接返回，路由侧不再重复计算
+        ring_vals = []
+        for p in points:
+            rv = p.get("Ring.No", p.get("RING", p.get("ring")))
+            try:
+                ring_vals.append(int(float(rv)))
+            except Exception:
+                continue
+        current_ring = max(ring_vals) if ring_vals else None
+        current_points = []
+        if current_ring is not None:
+            for p in points:
+                rv = p.get("Ring.No", p.get("RING", p.get("ring")))
+                try:
+                    if int(float(rv)) == int(current_ring):
+                        current_points.append(p)
+                except Exception:
+                    continue
+        if not current_points:
+            current_points = points[-1:]
+
+        def _valid(v):
+            try:
+                return v not in (None, "", "-") and not pd.isna(v)
+            except Exception:
+                return v not in (None, "", "-")
+
+        missing = []
+        has_cluster = any(_valid(p.get("Cluster_Label")) for p in current_points)
+        if not has_cluster:
+            missing.append("Cluster_Label")
+        for f in TBM_FEATURES:
+            if not any(_valid(p.get(f)) for p in current_points):
+                missing.append(f)
+        if missing:
+            ref = current_points[-1] if current_points else {}
+            fallback_data = {
+                "Ring.No": ref.get("Ring.No", ref.get("RING", current_ring)),
+                "time": ref.get("time"),
+            }
+            return self._fallback_no_risk_for_missing_fields(fallback_data, "结泥饼风险", missing)
+
+        sequence = [self._format_mud_cake_point(p) for p in points]
+        if not sequence:
+            return self._fallback_no_risk_for_missing_fields(
+                {"Ring.No": current_ring, "time": points[-1].get("time")},
+                "结泥饼风险",
+                ["Cluster_Label"] + list(TBM_FEATURES),
+            )
+        try:
+            result = self.mud_cake_calculator.calculate_ring_risk_sequence(sequence)
+        except Exception:
+            result = None
+        if not (isinstance(result, dict) and result.get('status') == 'success'):
+            return self._fallback_no_risk_for_missing_fields(
+                {"Ring.No": current_ring, "time": points[-1].get("time")},
+                "结泥饼风险",
+                ["Cluster_Label"] + list(TBM_FEATURES),
+            )
+        probability = float(result.get('combined_risk', 0.0))
+        risk_level_direct = result.get('risk_level', '无风险')
+        mapped_score = self.map_probability_to_score(probability, "结泥饼风险")
+        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, "结泥饼风险")
+        return {
+            "risk_type": "结泥饼风险",
+            "risk_level": risk_level,
+            "risk_level_model": risk_level_direct,
+            "risk_score": round(mapped_score, 2),
+            "probability": round(probability, 2),
+            "measures": measures,
+            "reason": reason,
+            "potential_risk": potential_risk,
+            "earliest_time": result.get('earliest_time', ''),
+            "stratum_label": result.get('stratum_label'),
+            "training_mode": result.get('training_mode', 'unified'),
+        }
 
     def _get_risk_level_and_measures(self, mapped_score, risk_type):
         if mapped_score <= 0.5:
@@ -197,146 +760,152 @@ class RiskAssessor:
             risk_level = "低风险Ⅱ"
         else:
             risk_level = "无风险Ⅰ"
-        if risk_type == "结泥饼风险":
-            potential_risk = "结泥饼预警" if risk_level != "无风险Ⅰ" else "-"
-        elif risk_type == "滞排风险":
-            potential_risk = "滞排预警" if risk_level != "无风险Ⅰ" else "-"
-        elif risk_type == "主驱动密封失效风险":
-            potential_risk = "主驱动密封失效预警" if risk_level != "无风险Ⅰ" else "-"
-        elif risk_type == "盾尾密封失效风险":
-            potential_risk = "盾尾密封失效预警" if risk_level != "无风险Ⅰ" else "-"
-        else:
-            potential_risk = "系统预警" if risk_level != "无风险Ⅰ" else "-"
+        config = _risk_config_by_type(risk_type) or {}
+        potential_risk = (
+            config.get("potential_risk", "系统预警")
+            if risk_level not in {"无风险Ⅰ", "低风险Ⅱ"}
+            else "-"
+        )
         measures, reason = self._get_measures_and_reason(risk_level, risk_type)
         return risk_level, measures, reason, potential_risk
 
     def _get_measures_and_reason(self, risk_level, risk_type):
-        try:
-            if risk_type == "结泥饼风险":
-                from app.risk.utils.mud_cake_risk import get_measures_and_reason as f
-                return f(risk_level)
-            if risk_type == "滞排风险":
-                from app.risk.utils.clog_risk import get_measures_and_reason as f
-                return f(risk_level)
-            if risk_type == "主驱动密封失效风险":
-                from app.risk.utils.mdr_seal_risk import get_measures_and_reason as f
-                return f(risk_level)
-            if risk_type == "盾尾密封失效风险":
-                from app.risk.utils.tail_seal_risk import get_measures_and_reason as f
-                return f(risk_level)
-        except Exception:
-            pass
-        return [], ""
+        return _measures_and_reason(risk_level, risk_type)
 
     def map_probability_to_score(self, probability, risk_type):
         try:
-            if risk_type == "结泥饼风险":
-                from app.risk.utils.mud_cake_risk import probability_to_score as f
-                return f(probability)
-            if risk_type == "滞排风险":
-                from app.risk.utils.clog_risk import probability_to_score as f
-                return f(probability)
-            if risk_type == "主驱动密封失效风险":
-                from app.risk.utils.mdr_seal_risk import probability_to_score as f
-                return f(probability)
-            if risk_type == "盾尾密封失效风险":
-                from app.risk.utils.tail_seal_risk import probability_to_score as f
-                return f(probability)
+            config = _risk_config_by_type(risk_type)
+            if config:
+                return _interpolate_score_from_probability(probability, config["score_points"])
         except Exception:
             pass
         return float(probability or 0.0)
 
     def reverse_map_score_to_probability(self, risk_score, risk_type):
         try:
-            if risk_type == "结泥饼风险":
-                from app.risk.utils.mud_cake_risk import reverse_score_to_probability as f
-                return f(risk_score)
-            if risk_type == "滞排风险":
-                from app.risk.utils.clog_risk import reverse_score_to_probability as f
-                return f(risk_score)
-            if risk_type == "主驱动密封失效风险":
-                from app.risk.utils.mdr_seal_risk import reverse_score_to_probability as f
-                return f(risk_score)
-            if risk_type == "盾尾密封失效风险":
-                from app.risk.utils.tail_seal_risk import reverse_score_to_probability as f
-                return f(risk_score)
+            config = _risk_config_by_type(risk_type)
+            if config:
+                return _interpolate_probability_from_score(risk_score, config["score_points"])
         except Exception:
             pass
         return 0.0
 
     def get_probability_thresholds(self, risk_type):
         try:
-            if risk_type == "结泥饼风险":
-                from app.risk.utils.mud_cake_risk import probability_thresholds as f
-                return f()
-            if risk_type == "滞排风险":
-                from app.risk.utils.clog_risk import probability_thresholds as f
-                return f()
-            if risk_type == "主驱动密封失效风险":
-                from app.risk.utils.mdr_seal_risk import probability_thresholds as f
-                return f()
-            if risk_type == "盾尾密封失效风险":
-                from app.risk.utils.tail_seal_risk import probability_thresholds as f
-                return f()
+            config = _risk_config_by_type(risk_type)
+            if config:
+                return config.get("probability_thresholds", (0.5, 0.3))
         except Exception:
             pass
         return 0.5, 0.3
 
-    def _assess_generic(self, data, calc_func, risk_type, fault_cause):
-        try:
-            result = calc_func(data)
-            probability = result.get('probability', 0)
+    def _missing_defined_fields(self, data, risk_type):
+        config = _risk_config_by_type(risk_type) or {}
+        missing = []
+        for field in config.get("fields", []) or []:
+            value = data.get(field) if isinstance(data, dict) else None
+            try:
+                is_missing = value in (None, "", "-") or pd.isna(value)
+            except Exception:
+                is_missing = value in (None, "", "-")
+            if is_missing:
+                missing.append(field)
+        return missing
+
+    def _fallback_no_risk_for_missing_fields(self, data, risk_type, missing_fields):
+        config = _risk_config_by_type(risk_type) or {}
+        _, normal_probability_threshold = config.get("probability_thresholds", (0.5, 0.3))
+        upper = max(float(normal_probability_threshold or 0.0) * 0.9, 0.0)
+        ring_val = None
+        time_val = None
+        if isinstance(data, dict):
+            ring_val = data.get("Ring.No", data.get("RING", data.get("ring")))
+            time_val = data.get("time", data.get("ts(Asia/Shanghai)", data.get("timestamp")))
+        seed_key = f"{risk_type}|{ring_val}|{time_val}"
+        probability = _stable_uniform_0_upper(seed_key, upper)
+        mapped_score = self.map_probability_to_score(probability, risk_type)
+        for _ in range(3):
+            if mapped_score > 3.5:
+                break
+            probability *= 0.5
             mapped_score = self.map_probability_to_score(probability, risk_type)
-            risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
-            return {
-                "risk_type": risk_type,
-                "risk_level": risk_level,
-                "risk_score": round(mapped_score, 2),
-                "probability": round(probability, 3),
-                "measures": measures,
-                "reason": reason,
-                "potential_risk": potential_risk,
-                "fault_cause": fault_cause,
-            }
-        except Exception as e:
-            raise
+        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
+        return {
+            "risk_type": risk_type,
+            "risk_level": risk_level,
+            "risk_score": round(mapped_score, 2),
+            "probability": round(probability, 3),
+            "measures": measures,
+            "reason": reason,
+            "potential_risk": potential_risk,
+            "fault_cause": config.get("fault_cause", ""),
+        }
+
+    def _assess_generic(self, data, calc_func, risk_type, fault_cause):
+        missing_fields = self._missing_defined_fields(data, risk_type)
+        if missing_fields:
+            return self._fallback_no_risk_for_missing_fields(data, risk_type, missing_fields)
+
+        result = calc_func(data)
+        probability = result.get('probability', 0)
+        mapped_score = self.map_probability_to_score(probability, risk_type)
+        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
+        return {
+            "risk_type": risk_type,
+            "risk_level": risk_level,
+            "risk_score": round(mapped_score, 2),
+            "probability": round(probability, 3),
+            "measures": measures,
+            "reason": reason,
+            "potential_risk": potential_risk,
+            "fault_cause": fault_cause,
+        }
 
     def assess_clog_risk(self, data):
-        return self._assess_generic(data, calculate_clog_risk, "滞排风险", "渣土改良不充分导致流动性不佳，最终在管道内发生滞排")
+        config = RISK_CONFIG["clog_risk"]
+        return self._assess_generic(data, calculate_clog_risk, config["full_risk_type"], config["fault_cause"])
 
     def assess_mdr_seal_risk(self, data):
-        return self._assess_generic(data, calculate_mdr_seal_risk, "主驱动密封失效风险", "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入")
+        config = RISK_CONFIG["mdr_seal_risk"]
+        return self._assess_generic(data, calculate_mdr_seal_risk, config["full_risk_type"], config["fault_cause"])
 
     def assess_tail_seal_risk(self, data):
-        return self._assess_generic(data, calculate_tail_seal_risk, "盾尾密封失效风险", "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力")
+        config = RISK_CONFIG["tail_seal_risk"]
+        return self._assess_generic(data, calculate_tail_seal_risk, config["full_risk_type"], config["fault_cause"])
 
     def assess_all_risks(self, data_point):
-        return [
-            self.assess_clog_risk(data_point),
-            self.assess_mdr_seal_risk(data_point),
-            self.assess_tail_seal_risk(data_point)
-        ]
+        results = []
+        for assess_func in (
+                self.assess_clog_risk,
+                self.assess_mdr_seal_risk,
+                self.assess_tail_seal_risk,
+        ):
+            try:
+                results.append(assess_func(data_point))
+            except Exception:
+                continue
+        return results
 
 
 def _clean_json_val(val, dash_if_empty=True):
     try:
         if val is None:
             return "-" if dash_if_empty else None
-        
+
         if isinstance(val, (list, dict)):
             # 如果已经是对象，则递归清理其中的元素或直接返回
             if isinstance(val, list):
                 return "，".join([str(_clean_json_val(x, False)) for x in val])
             return val
-            
+
         if isinstance(val, str):
             s = val.strip()
             if s == "" or s.lower() in ("null", "none"):
                 return "-" if dash_if_empty else None
-            
+
             # 处理 JSON 编码的字符串 (e.g., "\"text\"", "[1,2,3]", "{\"a\":1}")
             if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")) or \
-               s.startswith("[") or s.startswith("{"):
+                    s.startswith("[") or s.startswith("{"):
                 try:
                     d = json.loads(s)
                     return _clean_json_val(d, dash_if_empty)
@@ -346,17 +915,15 @@ def _clean_json_val(val, dash_if_empty=True):
                         return s[1:-1]
                     return s
             return s
-            
+
         return str(val)
     except Exception:
         return "-" if dash_if_empty else str(val)
 
 
-
-
-
 risk_assessor = RiskAssessor()
 bp = Blueprint('risk', __name__)
+
 
 
 def _to_local_dt(time_str: str):
@@ -444,13 +1011,13 @@ def map_safety_to_level(safety_level: str) -> str:
 def _risk_priority(level: str) -> int:
     try:
         if isinstance(level, str):
-            if "高风险Ⅳ" in level or "高风险" in level:
+            if ("Ⅳ" in level) or ("IV" in level) or ("高风险" in level):
                 return 4
-            if "中风险Ⅲ" in level or "中风险" in level:
+            if ("Ⅲ" in level) or ("III" in level) or ("中风险" in level):
                 return 3
-            if "低风险Ⅱ" in level or "低风险" in level:
+            if ("Ⅱ" in level) or ("II" in level) or ("低风险" in level):
                 return 2
-            if "无风险Ⅰ" in level or "无风险" in level:
+            if ("Ⅰ" in level) or ("无风险" in level):
                 return 1
     except Exception:
         pass
@@ -548,14 +1115,7 @@ def _aggregate_with_consecutive(lst, risk_type: str, n: int):
             final_item['risk_score'] = round(risk_assessor.map_probability_to_score(max_low_prob, risk_type), 2)
         except Exception:
             pass
-        # 同步潜在预警文案
-        if risk_type in ["滞排风险", "主驱动密封失效风险", "盾尾密封失效风险"]:
-            pr_map = {
-                "滞排风险": "滞排预警",
-                "主驱动密封失效风险": "主驱动密封失效预警",
-                "盾尾密封失效风险": "盾尾密封失效预警",
-            }
-            final_item['potential_risk'] = pr_map.get(risk_type, "-")
+        final_item['potential_risk'] = "-"
     else:
         final_item['risk_level'] = "无风险Ⅰ"
         no_probs = [lst[i].get('probability', 0) for i, pri in enumerate(priorities) if pri == 1]
@@ -570,11 +1130,25 @@ def _aggregate_with_consecutive(lst, risk_type: str, n: int):
     return final_item
 
 
-def aggregate_ring_risk_results(original_ring_data, current_ring_number=None, multi_ring_data=None, measurement=None):
+def aggregate_ring_risk_results(
+        original_ring_data,
+        current_ring_number=None,
+        multi_ring_data=None,
+        measurement=None,
+        source_candidates=None,
+        data_enriched=False,
+):
     if not isinstance(original_ring_data, list):
         original_ring_data = [original_ring_data] if original_ring_data else []
+    if not data_enriched:
+        original_ring_data = _enrich_points_with_geo(original_ring_data, source_candidates=source_candidates)
 
     risk_by_type = {}
+    risk_type_meta = {
+        "滞排风险": ("clog_risk", _risk_display_fields("clog_risk")),
+        "主驱动密封失效风险": ("mdr_seal_risk", _risk_display_fields("mdr_seal_risk")),
+        "盾尾密封失效风险": ("tail_seal_risk", _risk_display_fields("tail_seal_risk")),
+    }
     for point in original_ring_data:
         if isinstance(point, dict):
             try:
@@ -582,7 +1156,11 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None, mu
                 for r in point_results:
                     rt = r.get('risk_type')
                     if rt and rt != "结泥饼风险":
-                        risk_by_type.setdefault(rt, []).append(r)
+                        cfg_key, fields = risk_type_meta.get(rt, (None, None))
+                        rr = dict(r)
+                        rr["_time"] = point.get("time")
+                        rr["_params"] = {k: point.get(k) for k in fields} if fields else None
+                        risk_by_type.setdefault(rt, []).append(rr)
             except Exception as e:
                 pass
                 continue
@@ -594,53 +1172,58 @@ def aggregate_ring_risk_results(original_ring_data, current_ring_number=None, mu
         final_item = _aggregate_with_consecutive(lst, rt, CONSECUTIVE_TRIGGER_N)
         final_results.append(final_item)
 
-    # 结泥饼序列风险评估：读取连续六环数据进行“最后一环”风险判断
+    # 结泥饼序列风险评估
+    if multi_ring_data is None:
+        if current_ring_number is not None:
+            multi_ring_data = query_consecutive_ring_data(
+                current_ring_number,
+                count=MUD_CAKE_SEQUENCE_RING_COUNT,
+                measurement=measurement,
+            )
+        else:
+            multi_ring_data = original_ring_data
     try:
-        if multi_ring_data is None:
-            if current_ring_number is not None:
-                multi_ring_data = query_consecutive_ring_data(current_ring_number, count=6, measurement=measurement)
-            else:
-                multi_ring_data = original_ring_data
-        seq_risk = risk_assessor.assess_mud_cake_risk_sequence(multi_ring_data)
-        if isinstance(seq_risk, dict):
+        mud_cake_points = multi_ring_data
+        if isinstance(mud_cake_points, list) and current_ring_number is not None:
+            current_geo = _lookup_project_geo(current_ring_number, source_candidates)
+            mud_cake_points = _with_current_ring_cluster(mud_cake_points, current_geo)
+        seq_risk = risk_assessor.assess_mud_cake_risk_sequence(mud_cake_points)
+        if isinstance(seq_risk, dict) and seq_risk.get("risk_type") == "结泥饼风险":
             final_results.append(seq_risk)
-    except Exception as e:
+    except Exception:
         pass
 
-    # 若所有风险类型均无有效数据结果，则抛错而不是返回固定值
-    if not final_results:
-        raise RuntimeError("当前环缺少有效数据用于风险评估")
-
-    return final_results
+    return final_results, risk_by_type
 
 
-def query_ring_data(ring_number, measurement=None, fields=None):
+def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
     try:
-        m = measurement or INFLUXDB_MEASUREMENT
+        m = _quote_influx_identifier(measurement or INFLUXDB_MEASUREMENT)
         ring_formatted = f"{int(float(ring_number))}.00"
-        if fields and isinstance(fields, (list, tuple)):
-            safe_fields = []
-            for f in fields:
-                if isinstance(f, str) and f.strip():
-                    safe_fields.append(f.strip())
-            select_clause = ", ".join([f"\"{f}\"" for f in safe_fields]) if safe_fields else "*"
-        else:
-            select_clause = "*"
+        select_clause = _build_select_clause(fields)
+        limit_clause = ""
+        try:
+            if limit is not None:
+                limit_int = int(limit)
+                if limit_int > 0:
+                    limit_clause = f" LIMIT {limit_int}"
+        except Exception:
+            limit_clause = ""
         query_exact = f"""
-        SELECT {select_clause} FROM "{m}" 
+        SELECT {select_clause} FROM {m} 
         WHERE "Ring.No"='{ring_formatted}' 
-        ORDER BY time ASC
+        ORDER BY time ASC{limit_clause}
         """
         query_numeric = f"""
-        SELECT {select_clause} FROM "{m}" 
+        SELECT {select_clause} FROM {m} 
         WHERE "Ring.No"={float(ring_number)} 
-        ORDER BY time ASC
+        ORDER BY time ASC{limit_clause}
         """
         ring_int_val = int(float(ring_number))
         query_range = f"""
-        SELECT {select_clause} FROM "{m}" 
+        SELECT {select_clause} FROM {m} 
         WHERE "Ring.No" >= {ring_int_val} AND "Ring.No" < {ring_int_val + 1} 
-        ORDER BY time ASC
+        ORDER BY time ASC{limit_clause}
         """
         # 按顺序短路查询：一旦某种查询有结果，直接返回（保持输出一致）
         queries = [query_exact, query_numeric, query_range]
@@ -649,17 +1232,8 @@ def query_ring_data(ring_number, measurement=None, fields=None):
                 res = client.query(q)
                 points = list(res.get_points())
                 if points:
-                    seen = set()
-                    unique_points = []
-                    for p in points:
-                        t = p.get('time')
-                        if t not in seen:
-                            seen.add(t)
-                            unique_points.append(p)
-                    unique_points.sort(key=lambda x: x.get('time'))
-                    return unique_points
+                    return _dedupe_points_by_time(points)
             except Exception:
-                # 当前查询失败，继续尝试下一种查询
                 pass
 
         return None
@@ -671,21 +1245,13 @@ def query_ring_data(ring_number, measurement=None, fields=None):
 
 def query_ring_range_data(start_ring_inclusive, end_ring_exclusive, measurement=None, fields=None):
     try:
-        m = measurement or INFLUXDB_MEASUREMENT
+        m = _quote_influx_identifier(measurement or INFLUXDB_MEASUREMENT)
         start_int = int(float(start_ring_inclusive))
         end_int = int(float(end_ring_exclusive))
-
-        if fields and isinstance(fields, (list, tuple)):
-            safe_fields = []
-            for f in fields:
-                if isinstance(f, str) and f.strip():
-                    safe_fields.append(f.strip())
-            select_clause = ", ".join([f"\"{f}\"" for f in safe_fields]) if safe_fields else "*"
-        else:
-            select_clause = "*"
+        select_clause = _build_select_clause(fields)
 
         q = f"""
-        SELECT {select_clause} FROM "{m}"
+        SELECT {select_clause} FROM {m}
         WHERE "Ring.No" >= {start_int} AND "Ring.No" < {end_int}
         ORDER BY time ASC
         """
@@ -693,15 +1259,7 @@ def query_ring_range_data(start_ring_inclusive, end_ring_exclusive, measurement=
         points = list(res.get_points()) if res is not None else []
         if not points:
             return []
-        seen = set()
-        unique_points = []
-        for p in points:
-            t = p.get('time')
-            if t not in seen:
-                seen.add(t)
-                unique_points.append(p)
-        unique_points.sort(key=lambda x: x.get('time'))
-        return unique_points
+        return _dedupe_points_by_time(points)
     except Exception:
         return []
 
@@ -718,6 +1276,8 @@ def _group_points_by_ring(points):
             continue
         ring_map.setdefault(ring_int, []).append(p)
     return ring_map
+
+
 
 
 def collect_key_parameters(center_ring, fields, count=6, preload=None, measurement=None):
@@ -758,55 +1318,6 @@ def collect_key_parameters(center_ring, fields, count=6, preload=None, measureme
     return result
 
 
-def _build_mud_cake_fallback_risk(center_ring, preload_map, multi_ring_data=None, project_name=None, measurement=None):
-    ring_int = int(float(center_ring))
-    config = RISK_CONFIG["mud_cake_risk"]
-    safety_level = "无风险Ⅰ"
-    risk_level = map_safety_to_level(safety_level)
-    measures, reason = risk_assessor._get_measures_and_reason(safety_level, "结泥饼风险")
-    if isinstance(measures, list):
-        fm = "，".join([str(x) for x in measures])
-    else:
-        fm = str(measures) if measures is not None else "-"
-    imp = "，".join([config["map"][k] for k in config["fields"]])
-    mud_fields = config["fields"]
-    mud_map = config["map"]
-    mud_units = config["units"]
-    key_params = _rename_keys(
-        collect_key_parameters(center_ring, mud_fields, count=6, preload=preload_map, measurement=measurement), mud_map
-    )
-    key_params = _with_value_and_unit(key_params, mud_units)
-    if multi_ring_data is None:
-        multi_ring_data = query_consecutive_ring_data(center_ring, count=6, measurement=measurement)
-    fallback_time = None
-    if isinstance(multi_ring_data, list):
-        first_point = next(
-            (p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(ring_int)),
-            None
-        )
-        if first_point:
-            fallback_time = first_point.get("time")
-    warning_time = format_time_utc_to_shanghai(fallback_time) if fallback_time else "-"
-    return {
-        "risk_type": "结泥饼",
-        "ring": ring_int,
-        "project_name": project_name or PROJECT_NAME,
-        "fault_measures": fm,
-        "fault_reason": reason,
-        "fault_reason_analysis": get_fault_reason_analysis("结泥饼", safety_level),
-        "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
-        "impact_parameters": imp,
-        "safety_level": safety_level,
-        "risk_level": risk_level,
-        "risk_score": 4.0,
-        "probability": 0.0,
-        "potential_risk": "-",
-        "warning_time": warning_time,
-        "warning_parameters": "-",
-        "key_parameters": key_params,
-    }
-
-
 @bp.route('/getRiskLevel', methods=['POST'])
 def get_risk_level():
     try:
@@ -825,74 +1336,108 @@ def get_risk_level():
                 "message": "未提供环号参数"
             }), 400
 
-        try:
-            ring_number = float(ring_number)
-        except (ValueError, TypeError):
-            return jsonify({
-                "status": "error",
-                "message": f"环号参数格式错误: {ring_number}"
-            }), 400
+        ring_number, parse_err_resp, parse_err_code = _parse_ring_number(ring_number)
+        if parse_err_resp is not None:
+            return parse_err_resp, parse_err_code
 
-        # 解析 shield_id，映射 measurement 与项目名
         shield_id = data.get('shield_id')
-        measurement, project_name_request = _resolve_shield_context(shield_id)
+        measurement, project_code_request = _resolve_shield_context(shield_id)
+        ring_int_cache = int(float(ring_number))
+        cache_ttl = float(os.environ.get("GETRISKLEVEL_CACHE_TTL_SEC", "10") or 10)
+        cache_key = (str(shield_id).strip() if shield_id else "", ring_int_cache)
+        if cache_ttl > 0:
+            cached = _ttl_cache_get("risk_level_result", cache_key)
+            if isinstance(cached, dict):
+                return jsonify(cached)
+        source_candidates = _source_candidates(
+            shield_id=shield_id,
+            project_code=project_code_request,
+            request_data=data,
+        )
 
-        center_int = int(float(ring_number))
-        start_ring = center_int - 5
-        required_fields = set()
-        try:
-            for cfg in RISK_CONFIG.values():
-                for f in cfg.get("fields", []) or []:
-                    required_fields.add(f)
-            required_fields.add("state")
-            required_fields.add("Ring.No")
-        except Exception:
-            pass
+        center_int = ring_int_cache
+        ring_window_count = MUD_CAKE_SEQUENCE_RING_COUNT
+        start_ring = center_int - (ring_window_count - 1)
 
-        multi_ring_data = query_ring_range_data(start_ring, center_int + 1, measurement=measurement, fields=sorted(required_fields))
+        required_fields = _risk_query_fields()
+
+        multi_ring_data = query_ring_range_data(start_ring, center_int + 1, measurement=measurement,
+                                                fields=required_fields)
         if not multi_ring_data:
-            multi_ring_data = query_consecutive_ring_data(ring_number, count=6, measurement=measurement, fields=sorted(required_fields)) or []
+            multi_ring_data = query_consecutive_ring_data(ring_number, count=ring_window_count, measurement=measurement,
+                                                          fields=required_fields) or []
 
         ring_points_map = _group_points_by_ring(multi_ring_data)
         original_ring_data = ring_points_map.get(center_int) or []
         if not original_ring_data:
-            ring_data = query_ring_data(ring_number, measurement=measurement, fields=sorted(required_fields))
+            ring_data = query_ring_data(ring_number, measurement=measurement, fields=required_fields)
             original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
 
         if not original_ring_data:
-            return jsonify({
-                "status": "error",
-                "message": f"无法获取环号{ring_number}的数据",
-                "suggestion": "请检查环号是否正确或联系管理员"
-            }), 404
+            empty_result = {
+                "ring": int(ring_number),
+                "project_code": project_code_request,
+                "mud_cake_risk": {},
+                "clog_risk": {},
+                "mdr_seal_risk": {},
+                "tail_seal_risk": {},
+            }
+            if cache_ttl > 0:
+                _ttl_cache_set("risk_level_result", cache_key, empty_result, ttl_sec=cache_ttl, max_items=2048)
+            return jsonify(empty_result)
 
         preload_map = {}
         for r in range(start_ring, center_int + 1):
             preload_map[r] = ring_points_map.get(r) or []
         preload_map[center_int] = original_ring_data
+        all_display_fields = []
+        seen_display_fields = set()
+        for key in ("mud_cake_risk", "clog_risk", "mdr_seal_risk", "tail_seal_risk"):
+            for field in _risk_display_fields(key):
+                if field not in seen_display_fields:
+                    seen_display_fields.add(field)
+                    all_display_fields.append(field)
+        all_key_parameters = collect_key_parameters(
+            ring_number,
+            all_display_fields,
+            count=ring_window_count,
+            preload=preload_map,
+            measurement=measurement,
+        )
 
-        risk_results = aggregate_ring_risk_results(original_ring_data, current_ring_number=ring_number, multi_ring_data=multi_ring_data, measurement=measurement)
+        risk_results, point_results_by_type = aggregate_ring_risk_results(
+            original_ring_data,
+            current_ring_number=ring_number,
+            multi_ring_data=multi_ring_data,
+            measurement=measurement,
+            source_candidates=source_candidates,
+            data_enriched=True,
+        )
         result = {
             "ring": int(ring_number),
+            "project_code": project_code_request,
             "mud_cake_risk": {},
             "clog_risk": {},
             "mdr_seal_risk": {},
             "tail_seal_risk": {}
         }
-        def _build_risk_item(risk_obj, risk_type_label, risk_config_key, assessor_func, fault_cause):
+
+        def _build_risk_item(risk_obj, risk_config_key):
+            spec = RISK_OUTPUT_SPECS[risk_config_key]
             config = RISK_CONFIG[risk_config_key]
             fm = risk_obj.get("measures")
             fm = _clean_json_val(fm)
-            imp = "，".join([config["map"].get(k, k) for k in config["fields"]])
-            
+            display_fields = _risk_display_fields(risk_config_key)
+            imp = _risk_display_impact(risk_config_key)
+
             risk_out = {
-                "risk_type": risk_type_label,
+                "risk_type": spec["risk_type_label"],
                 "ring": int(result["ring"]),
-                "project_name": project_name_request,
+                "project_code": project_code_request,
                 "fault_measures": fm,
                 "fault_reason": risk_obj.get("reason"),
-                "fault_reason_analysis": get_fault_reason_analysis(risk_type_label, risk_obj["risk_level"]),
-                "fault_cause": fault_cause,
+                "fault_reason_analysis": get_fault_reason_analysis(spec["risk_type_label"], risk_obj["risk_level"]),
+                "fault_cause": spec["fault_cause"],
                 "impact_parameters": imp,
                 "safety_level": risk_obj["risk_level"],
                 "risk_level": map_safety_to_level(risk_obj["risk_level"]),
@@ -902,113 +1447,100 @@ def get_risk_level():
                 "warning_time": "-",
                 "warning_parameters": "-",
             }
+            if risk_obj.get("fallback"):
+                risk_out["fallback"] = True
+                risk_out["fallback_reason"] = risk_obj.get("fallback_reason")
+                risk_out["missing_fields"] = risk_obj.get("missing_fields", [])
 
-            earliest_time_raw, earliest_params = _find_earliest_warning(
-                original_ring_data, assessor_func, CONSECUTIVE_TRIGGER_N, config["fields"]
-            )
+            earliest_time_raw = "-"
+            earliest_params = None
+            if risk_config_key == "mud_cake_risk":
+                earliest_time_raw = risk_obj.get("earliest_time") or "-"
+            else:
+                earliest_time_raw, earliest_params = _find_earliest_warning_from_point_results(
+                    point_results_by_type.get(spec["full_risk_type"]),
+                    CONSECUTIVE_TRIGGER_N,
+                )
 
             if earliest_params:
                 earliest_params = round_params(earliest_params)
-                
+
             if earliest_time_raw and earliest_time_raw != "-":
-                risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
+                final_level_text = risk_obj.get("risk_level", "")
+                should_warn = final_level_text in WARNING_LEVELS
+                if risk_config_key != "mud_cake_risk" or should_warn:
+                    risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
             elif original_ring_data:
                 t0 = original_ring_data[0].get("time")
                 if t0:
                     risk_out["warning_time"] = format_time_utc_to_shanghai(t0)
 
             if earliest_params:
-                wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in earliest_params}
+                wp_raw = {config["map"].get(k, k): earliest_params.get(k) for k in display_fields if
+                          k in earliest_params}
+                risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
+            elif risk_config_key == "mud_cake_risk" and original_ring_data:
+                first_p = original_ring_data[0]
+                ep = {f: first_p.get(f) for f in display_fields}
+                wp_raw = {config["map"].get(k, k): ep.get(k) for k in ep}
                 risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
             else:
                 risk_out["warning_parameters"] = "-"
 
-            risk_out["key_parameters"] = _rename_keys(
-                collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map, measurement=measurement), config["map"])
+            selected_key_parameters = [
+                {"time": item.get("time"), **{field: item.get(field) for field in display_fields}}
+                for item in all_key_parameters
+            ]
+            risk_out["key_parameters"] = _rename_keys(selected_key_parameters, config["map"])
             risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
-            
+
             return risk_out
+
+        def _build_missing_fields_no_risk_item(risk_config_key):
+            spec = RISK_OUTPUT_SPECS[risk_config_key]
+            config = RISK_CONFIG[risk_config_key]
+            measures, reason = _measures_and_reason("无风险Ⅰ", spec["full_risk_type"])
+            _, normal_probability_threshold = config.get("probability_thresholds", (0.5, 0.3))
+            upper = max(float(normal_probability_threshold or 0.0) * 0.9, 0.0)
+            seed_key = f"{project_code_request}|{ring_number}|{spec['full_risk_type']}"
+            probability = _stable_uniform_0_upper(seed_key, upper)
+            risk_score = risk_assessor.map_probability_to_score(probability, spec["full_risk_type"])
+            for _ in range(3):
+                if risk_score > 3.5:
+                    break
+                probability *= 0.5
+                risk_score = risk_assessor.map_probability_to_score(probability, spec["full_risk_type"])
+            no_risk_obj = {
+                "risk_level": "无风险Ⅰ",
+                "risk_score": round(float(risk_score), 2),
+                "probability": float(probability),
+                "measures": measures,
+                "reason": reason,
+                "potential_risk": "-",
+            }
+            return _build_risk_item(no_risk_obj, risk_config_key)
 
         for risk in risk_results:
             risk_type = risk['risk_type']
 
             if risk_type == "结泥饼风险":
-                risk_type_mapped = "结泥饼"
-                # 结泥饼逻辑略有特殊，仍保留部分特殊逻辑
-                try:
-                    center_ring_int = int(float(ring_number))
-                    present_rings = set()
-                    for p in multi_ring_data:
-                        r = p.get('Ring.No', p.get('RING'))
-                        try:
-                            present_rings.add(int(float(r)))
-                        except Exception:
-                            pass
-                    if center_ring_int not in present_rings or len(present_rings) < 6:
-                        result["mud_cake_risk"] = _build_mud_cake_fallback_risk(ring_number, preload_map, multi_ring_data, project_name_request, measurement)
-                        continue
-                except Exception:
-                    result["mud_cake_risk"] = _build_mud_cake_fallback_risk(ring_number, preload_map, multi_ring_data, project_name_request, measurement)
-                    continue
-
-                fm = _clean_json_val(risk["measures"])
-                config = RISK_CONFIG["mud_cake_risk"]
-                imp = "，".join([config["map"].get(k, k) for k in config["fields"]])
-                risk_out = {
-                    "risk_type": risk_type_mapped,
-                    "ring": int(result["ring"]),
-                    "project_name": project_name_request,
-                    "fault_measures": fm,
-                    "fault_reason": risk["reason"],
-                    "fault_reason_analysis": get_fault_reason_analysis(risk_type_mapped, risk["risk_level"]),
-                    "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
-                    "impact_parameters": imp,
-                    "safety_level": risk["risk_level"],
-                    "risk_level": map_safety_to_level(risk["risk_level"]),
-                    "risk_score": round(risk["risk_score"], 2),
-                    "probability": round(risk["probability"], 2),
-                    "potential_risk": risk["potential_risk"],
-                    "warning_time": "-",
-                    "warning_parameters": "-",
-                }
-                
-                # 结泥饼的 warning_time 逻辑
-                earliest_time_raw = risk.get("earliest_time")
-                final_level_text = risk.get("risk_level", "")
-                should_warn = final_level_text in ("低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ")
-                
-                if should_warn and earliest_time_raw and earliest_time_raw != "-":
-                    risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
-                else:
-                    # 备选：当前环的第一条数据时间
-                    first_p = next((p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
-                    if first_p:
-                        risk_out["warning_time"] = format_time_utc_to_shanghai(first_p.get("time"))
-
-                # 结泥饼的 warning_parameters (取当前环第一条数据快照)
-                first_p = next((p for p in multi_ring_data if int(float(p.get('Ring.No', p.get('RING', -1)))) == int(result["ring"])), None)
-                if first_p:
-                    ep = {f: first_p.get(f) for f in config["fields"]}
-                    wp_raw = {config["map"].get(k, k): ep.get(k) for k in ep}
-                    risk_out["warning_parameters"] = _append_units_to_map(wp_raw, config["units"])
-                
-                risk_out["key_parameters"] = _rename_keys(
-                    collect_key_parameters(ring_number, config["fields"], count=6, preload=preload_map, measurement=measurement), config["map"])
-                risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
-                result["mud_cake_risk"] = risk_out  
+                result["mud_cake_risk"] = _build_risk_item(risk, "mud_cake_risk")
 
             elif risk_type == "滞排风险":
-                result["clog_risk"] = _build_risk_item(risk, "滞排", "clog_risk", risk_assessor.assess_clog_risk, "渣土改良不充分导致流动性不佳，最终在管道内发生滞排")
+                result["clog_risk"] = _build_risk_item(risk, "clog_risk")
 
             elif risk_type == "主驱动密封失效风险":
-                result["mdr_seal_risk"] = _build_risk_item(risk, "主驱动密封失效", "mdr_seal_risk", risk_assessor.assess_mdr_seal_risk, "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入")
+                result["mdr_seal_risk"] = _build_risk_item(risk, "mdr_seal_risk")
 
             elif risk_type == "盾尾密封失效风险":
-                result["tail_seal_risk"] = _build_risk_item(risk, "盾尾密封失效", "tail_seal_risk", risk_assessor.assess_tail_seal_risk, "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力")
+                result["tail_seal_risk"] = _build_risk_item(risk, "tail_seal_risk")
 
-        if not result.get("mud_cake_risk"):
-            result["mud_cake_risk"] = _build_mud_cake_fallback_risk(ring_number, preload_map, multi_ring_data, project_name_request, measurement)
+        for risk_config_key in ("mud_cake_risk", "clog_risk", "mdr_seal_risk", "tail_seal_risk"):
+            if not result.get(risk_config_key):
+                result[risk_config_key] = _build_missing_fields_no_risk_item(risk_config_key)
 
+        if cache_ttl > 0:
+            _ttl_cache_set("risk_level_result", cache_key, result, ttl_sec=cache_ttl, max_items=2048)
         return jsonify(result)
     except Exception as e:
         traceback.print_exc()
@@ -1019,7 +1551,7 @@ def get_risk_level():
 
 
 class _MySQLConnectionPool:
-    def __init__(self, host, port, user, password, database, charset, cursorclass, maxsize=5):
+    def __init__(self, host, port, user, password, database, charset, cursorclass, maxsize=5, max_idle=0):
         self._host = host
         self._port = port
         self._user = user
@@ -1027,14 +1559,15 @@ class _MySQLConnectionPool:
         self._database = database
         self._charset = charset
         self._cursorclass = cursorclass
-        self._maxsize = maxsize
-        self._pool = queue.Queue()
+        self._maxsize = max(1, int(maxsize or 1))
+        self._max_idle = max(0, min(int(max_idle or 0), self._maxsize))
+        self._pool = queue.Queue(maxsize=self._maxsize)
         self._created = 0
         self._lock = threading.Lock()
 
     def _create_conn(self):
-        read_timeout = int(os.environ.get("MYSQL_READ_TIMEOUT", "8"))
-        write_timeout = int(os.environ.get("MYSQL_WRITE_TIMEOUT", "8"))
+        read_timeout = Config.MYSQL_READ_TIMEOUT
+        write_timeout = Config.MYSQL_WRITE_TIMEOUT
         return pymysql.connect(
             host=self._host,
             port=self._port,
@@ -1049,44 +1582,93 @@ class _MySQLConnectionPool:
             write_timeout=write_timeout,
         )
 
-    def acquire(self):
+    def _discard(self, conn):
         try:
-            conn = self._pool.get_nowait()
-            try:
-                conn.ping(reconnect=True)
-            except Exception:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-                conn = self._create_conn()
-            return conn
+            if conn is not None:
+                conn.close()
         except Exception:
+            pass
+        with self._lock:
+            if self._created > 0:
+                self._created -= 1
+
+    def _reset_for_reuse(self, conn):
+        try:
+            conn.ping(reconnect=False)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return True
+        except Exception:
+            self._discard(conn)
+            return False
+
+    def acquire(self):
+        while True:
+            try:
+                conn = self._pool.get_nowait()
+            except queue.Empty:
+                break
+            if self._reset_for_reuse(conn):
+                return conn
+
+        with self._lock:
+            if self._created < self._maxsize:
+                conn = self._create_conn()
+                self._created += 1
+                return conn
+
+        wait_timeout = float(os.environ.get("MYSQL_POOL_WAIT", "5"))
+        deadline = time.monotonic() + wait_timeout
+        while True:
             with self._lock:
                 if self._created < self._maxsize:
                     conn = self._create_conn()
                     self._created += 1
                     return conn
-            wait_timeout = float(os.environ.get("MYSQL_POOL_WAIT", "5"))
-            try:
-                return self._pool.get(timeout=wait_timeout)
-            except Exception:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise RuntimeError("MySQL连接池等待超时")
+            try:
+                conn = self._pool.get(timeout=min(0.1, remaining))
+            except queue.Empty:
+                continue
+            if self._reset_for_reuse(conn):
+                return conn
 
     def release(self, conn):
+        if conn is None:
+            return
+        if not self._reset_for_reuse(conn):
+            return
+        if self._pool.qsize() >= self._max_idle:
+            self._discard(conn)
+            return
         try:
-            self._pool.put(conn)
+            self._pool.put_nowait(conn)
+        except queue.Full:
+            self._discard(conn)
         except Exception:
+            self._discard(conn)
+
+    def discard(self, conn):
+        self._discard(conn)
+
+    def close_all(self):
+        while True:
             try:
-                conn.close()
-            except Exception:
-                pass
+                conn = self._pool.get_nowait()
+            except queue.Empty:
+                return
+            self._discard(conn)
 
 
 class _PooledConnection:
     def __init__(self, pool, conn):
         self._pool = pool
         self._conn = conn
+        self._closed = False
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
@@ -1094,54 +1676,63 @@ class _PooledConnection:
     def __enter__(self):
         return self
 
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._pool.release(self._conn)
+        self._conn = None
+
     def __exit__(self, exc_type, exc, tb):
-        try:
-            if exc_type is not None:
-                try:
-                    self._conn.close()
-                except Exception:
-                    pass
-            else:
-                self._pool.release(self._conn)
-        except Exception:
-            try:
-                self._conn.close()
-            except Exception:
-                pass
+        if self._closed:
+            return False
+        self._closed = True
+        if exc_type is not None:
+            self._pool.discard(self._conn)
+        else:
+            self._pool.release(self._conn)
+        self._conn = None
         return False
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 _MYSQL_POOL = None
+_MYSQL_POOL_LOCK = threading.Lock()
 
 
 def _mysql_connect():
     global _MYSQL_POOL
     try:
         if _MYSQL_POOL is None:
-            size_env = os.environ.get("MYSQL_POOL_SIZE", "5")
-            try:
-                maxsize = int(size_env)
-            except Exception:
-                maxsize = 5
-            _MYSQL_POOL = _MySQLConnectionPool(
-                host="192.168.211.104",
-                port=6447,
-                user="root",
-                password="7m@9X!zP2qA5LbNcRfTgYhJkM3nD4v6B",
-                database="algorithm",
-                charset="utf8",
-                cursorclass=pymysql.cursors.DictCursor,
-                maxsize=maxsize,
-            )
+            with _MYSQL_POOL_LOCK:
+                if _MYSQL_POOL is None:
+                    maxsize = _env_int("MYSQL_POOL_SIZE", 5)
+                    _MYSQL_POOL = _MySQLConnectionPool(
+                        host=Config.MYSQL_HOST,
+                        port=Config.MYSQL_PORT,
+                        user=Config.MYSQL_USER,
+                        password=Config.MYSQL_PASSWORD,
+                        database=Config.MYSQL_DATABASE,
+                        charset="utf8",
+                        cursorclass=pymysql.cursors.DictCursor,
+                        maxsize=maxsize,
+                        max_idle=_env_int("MYSQL_POOL_MAX_IDLE", 0),
+                    )
         raw = _MYSQL_POOL.acquire()
         _set_session_timeout(raw)  # 每次获取连接时设置会话超时
         return _PooledConnection(_MYSQL_POOL, raw)
     except Exception as e:
         raise RuntimeError(f"MySQL连接失败: {e}")
 
+
 def _set_session_timeout(conn):
     try:
-        max_ms = int(os.environ.get("MYSQL_MAX_EXECUTION_MS", "3000"))
+        max_ms = Config.MYSQL_MAX_EXECUTION_MS
         with conn.cursor() as cur:
             cur.execute("SET SESSION MAX_EXECUTION_TIME=%s", (max_ms,))
     except Exception:
@@ -1170,135 +1761,99 @@ def _normalize_safety_level(level):
 
 def get_fault_reason_analysis(risk_type: str, risk_level: str) -> str:
     try:
-        t = str(risk_type)
         lvl = _normalize_safety_level(risk_level)
-        if "结泥饼" in t:
-            mapping = {
-                "无风险Ⅰ": "刀盘扭矩与刀盘转速匹配良好，推力与推进速度稳定，贯入度无异常波动。渣土含水率与改良剂比例处于工艺目标，仓壁与面板未见黏附或板结痕迹，排泥连续顺畅，不具备泥饼形成的物理条件。",
-                "低风险Ⅱ": "观察到刀盘扭矩轻微抬升、推进速度小幅下降，推力与贯入度边界化波动，反映土体塑性增大与局部摩阻上升。面板可能出现初始黏附点，渣粒分布偏粗或含水率偏离最佳区间，短时排泥不均。若该状态持续，将促使黏附向板结演化，需要关注改良剂与水分的微调空间。",
-                "中风险Ⅲ": "刀盘扭矩与推力持续偏高，推进速度显著下降且波动加大，贯入度呈非线性起伏，指示面板与土仓内已有黏附/板结积聚。排泥阻力增大、管路压降上升、回流概率增加，渣土流变性恶化。成因多与高粘性土、改良不足或含水率偏低/偏高叠加导致黏结力提升有关，若不干预泥饼将沿面板扩展并破坏掘进稳定性与效率。",
-                "高风险Ⅳ": "面板与仓内泥饼大面积形成，刀盘扭矩异常抬升且伴随振动，推进速度显著受限或间断，推力异常维持，排泥系统出现明显阻塞。进一步将导致驱动负荷过高、温升增大、密封与轴承受污染风险上升，存在设备损伤与渗水次生风险，应在可控前提下尽快处置以恢复切削与排泥通道。",
-            }
-            return mapping.get(lvl, "当前等级暂无更详细分析")
-        if "滞排" in t:
-            mapping = {
-                "无风险Ⅰ": "开挖舱压力与工作舱压力稳定，排浆泵进泥口压力处于正常区间，压力梯度合理、流态均匀。渣土含水率与改良剂配比匹配，管路内无沉积或团聚迹象，排量连续可控。",
-                "低风险Ⅱ": "管路摩阻略增，泵出口与进泥口压力出现轻微非同步波动，短时排量下降提示流动性边界化。渣土可能存在剪切变稀临界、团聚核初始形成或颗粒级配偏离，需关注参数微调以避免在弯头、缩径或高阻段形成稳定堵塞核。",
-                "中风险Ⅲ": "进泥口压力显著抬升且泵压波动加剧，表征管内已有部分堵塞或团聚带。压力梯度异常、回流概率上升、脉动增大，局部存在沉积与再悬浮循环。根因多与改良不足、含水率不当、细粒黏性偏高或输送能级不匹配相关，需及时分段冲洗并联动调整改良与泵速以恢复连续性。",
-                "高风险Ⅳ": "系统出现严重滞排或近乎完全堵塞，泵压异常、排量骤降甚至中断，压力梯度失衡并伴随强烈脉动。继续掘进将导致设备过载、密封与管路风险叠加，存在安全与质量隐患，应尽快在安全窗口下清障并重建稳定输送条件。",
-            }
-            return mapping.get(lvl, "当前等级暂无更详细分析")
-        if "主驱动密封失效" in t:
-            mapping = {
-                "无风险Ⅰ": "工作舱压力、油气密封反馈压力、主驱动伸缩密封油脂压力、齿轮油油气密封压力或密封检测压力整体处于稳态，密封压力梯度合理。无渗漏迹象，油脂供给与流变性能正常，密封件弹性与磨耗处健康区间。",
-                "低风险Ⅱ": "反馈或检测通道压力轻微偏移，梯度呈早期紊乱但尚能维持屏障。可能存在密封唇口初期磨耗、供脂压力波动或回油不畅等趋势，偶发微渗与油脂消耗偏快，建议提高监测敏感度并复核供脂策略与间隙设定。",
-                "中风险Ⅲ": "检测压力升高与密封压力不稳并存，梯度失衡加剧；刀盘负荷与振动出现相关性波动，伴随间歇性渗漏征兆。综合表明密封功能下降、油脂屏障削弱，外界介质侵入风险上升，若不处置将危及主轴承清洁度与寿命。",
-                "高风险Ⅳ": "密封系统屏障功能显著失效，压力异常与渗漏明确，油脂难以维持有效隔离。继续运行将导致土水介质进入主轴承腔，污染润滑与加速磨损，存在严重设备损伤风险，应在保护条件下尽快停机并修复或更换密封组件。",
-            }
-            return mapping.get(lvl, "当前等级暂无更详细分析")
-        if "盾尾密封失效" in t:
-            mapping = {
-                "无风险Ⅰ": "盾尾密封压力与注浆压力处于工况目标区间，密封刷弹性良好、刷列贴合充分，无渗水或浆液串漏现象，与管片拼装配合稳定。",
-                "低风险Ⅱ": "密封压力与注脂量轻微上调以维持密封效果，提示局部刷列出现初期磨耗或贴合度下降，个别位置可能存在微渗。若维持该趋势将加速磨耗与膜层破坏，需关注注脂分配均衡与刷列状态。",
-                "中风险Ⅲ": "密封压力波动加剧，注脂量显著增加以对冲密封衰减；腔压与负荷出现不稳定相关性。可见局部渗漏与刷列磨耗加重，密封水/浆屏障降低，若不干预将扩大至环向失效并影响管片成型与对口质量。",
-                "高风险Ⅳ": "刷列严重磨损、撕裂或压损导致渗漏明确，密封压力难以维持，同步注浆与防水能力显著下降。继续掘进将带来水浆侵入、质量与安全复合风险，应在保护窗口内处置并恢复密封能力。",
-            }
+        config = _risk_config_by_type(risk_type) or {}
+        mapping = config.get("fault_reason_analysis", {})
+        if mapping:
             return mapping.get(lvl, "当前等级暂无更详细分析")
         return "当前等级暂无更详细分析"
     except Exception:
         return "当前等级暂无更详细分析"
 
 
-def _fetch_latest_row(conn, table):
+def _fetch_latest_row(conn, table, project_code=None):
     _set_session_timeout(conn)
+    table_sql = _quote_mysql_identifier(table)
     with conn.cursor() as cur:
+        ttl_latest = float(os.environ.get("LATEST_ROW_CACHE_TTL_SEC", "2") or 2)
+        latest_key = (str(table), str(project_code).strip() if project_code is not None else "")
+        cached_row = _ttl_cache_get("mysql_latest_row", latest_key)
+        if cached_row is not None:
+            return cached_row
+
+        cache_key = ("cols", str(table))
+        existing_cols = _ttl_cache_get("mysql_table_columns", cache_key)
+        if not existing_cols:
+            try:
+                cur.execute(f"SHOW COLUMNS FROM {table_sql}")
+                rows = cur.fetchall() or []
+                existing_cols = {row.get("Field") or row.get("field") for row in rows}
+                existing_cols.discard(None)
+                _ttl_cache_set("mysql_table_columns", cache_key, existing_cols, ttl_sec=600.0, max_items=256)
+            except Exception:
+                existing_cols = set()
+
+        where_sql = ""
+        params = ()
+        if (
+                project_code is not None
+                and str(project_code).strip() != ""
+                and "project_code" in existing_cols
+        ):
+            where_sql = " WHERE `project_code`=%s"
+            params = (str(project_code).strip(),)
+
+        desired_cols = [c for c in LATEST_RISK_ROW_COLUMNS if c in existing_cols]
+        if not desired_cols:
+            desired_cols = ["ring", "project_code", "risk_level", "risk_score"]
+            desired_cols = [c for c in desired_cols if c in existing_cols] or ["ring"]
+        column_sql = ", ".join([f"`{column}`" for column in desired_cols])
+
         try:
-            cur.execute(f"SELECT * FROM `{table}` WHERE `id`=(SELECT MAX(`id`) FROM `{table}`)")
+            if "id" in existing_cols:
+                cur.execute(f"SELECT {column_sql} FROM {table_sql}{where_sql} ORDER BY `id` DESC LIMIT 1", params)
+            else:
+                raise RuntimeError("missing id")
             row = cur.fetchone()
             if row:
                 return row
         except Exception:
             pass
-        try:
-            cur.execute(f"SELECT * FROM `{table}` WHERE `ring`=(SELECT MAX(`ring`) FROM `{table}`)")
-            row = cur.fetchone()
-            if row:
-                return row
-        except Exception:
-            pass
-        try:
-            cur.execute(f"SELECT * FROM `{table}` ORDER BY `id` DESC LIMIT 1")
-            row = cur.fetchone()
-            if row:
-                return row
-        except Exception:
-            pass
-        cur.execute(f"SELECT * FROM `{table}` ORDER BY `ring` DESC LIMIT 1")
-        return cur.fetchone()
+
+        cur.execute(f"SELECT {column_sql} FROM {table_sql}{where_sql} ORDER BY `ring` DESC LIMIT 1", params)
+        row = cur.fetchone()
+        if row is not None:
+            _ttl_cache_set("mysql_latest_row", latest_key, row, ttl_sec=ttl_latest, max_items=512)
+        return row
 
 
-@bp.route('/getLatestRiskLevel', methods=['GET'])
+@bp.route('/getLatestRiskLevel', methods=['POST'])
 def get_latest_risk_level():
     try:
-        conn = _mysql_connect()
-        rows = {}
-        latest_ring = None
-        risk_type_param = request.args.get("risk_type")
-        if not risk_type_param:
-            body = request.get_json(silent=True) or {}
-            risk_type_param = body.get("risk_type")
-        if risk_type_param:
-            rp = str(risk_type_param).strip()
-            if rp.endswith("风险"):
-                rp = rp[:-2]
-            table = RISK_TABLES.get(rp)
-            if not table:
-                return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
-            with conn:
-                row = _fetch_latest_row(conn, table)
-                if row:
-                    rows[rp] = row
-                    r = row.get("ring")
-                    if r is not None:
-                        try:
-                            latest_ring = int(float(r))
-                        except Exception:
-                            latest_ring = None
-            if latest_ring is None:
-                return jsonify({"status": "error", "error": "MySQL未找到指定风险的最新环数据"}), 404
-        else:
-            with conn:
-                for k, t in RISK_TABLES.items():
-                    row = _fetch_latest_row(conn, t)
-                    if row:
-                        rows[k] = row
-                        r = row.get("ring")
-                        if r is not None:
-                            try:
-                                rv = int(float(r))
-                                latest_ring = rv if latest_ring is None else max(latest_ring, rv)
-                            except Exception:
-                                pass
-        if latest_ring is None:
-            return jsonify({"status": "error", "error": "MySQL未找到最新环数据"}), 404
+        data, err_resp, err_code = _require_json(
+            [
+                ("shield_id", "缺少 shield_id 参数"),
+                ("risk_type", "缺少 risk_type 参数"),
+            ]
+        )
+        if err_resp is not None:
+            return err_resp, err_code
+        shield_id = data.get("shield_id")
+        risk_type_param = data.get("risk_type")
 
-        def _get_any(row, keys):
-            for key in keys:
-                try:
-                    val = row.get(key)
-                    if val not in (None, "", "-"):
-                        return val
-                except Exception:
-                    pass
-            return None
+        rp = str(risk_type_param).strip()
+        table = RISK_TABLES.get(rp)
+        if not table:
+            return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
 
-        def _read_float(row, key, ndigits=2):
-            try:
-                val = row.get(key)
-                return round(float(val), ndigits) if val is not None and str(val).strip() != "" else "-"
-            except Exception:
-                return "-"
-        def build_risk_out(row, meta):
+        _, project_code_request = _resolve_shield_context(shield_id)
+
+        with _mysql_connect() as conn:
+            row = _fetch_latest_row(conn, table, project_code=project_code_request)
+        if not row:
+            return jsonify({"status": "error", "error": "MySQL未找到指定风险的最新环数据"}), 404
+
+        def build_risk_out(row, risk_type_label):
             safety = row.get("safety_level")
             if safety is None or str(safety).strip() == "":
                 safety = row.get("risk_level")
@@ -1308,71 +1863,33 @@ def get_latest_risk_level():
             except Exception:
                 ring_num = _clean_json_val(ring_val)
 
-            fm = _get_any(row, ["fault_measures", "measures"])
+            fm = next((row.get(k) for k in ("fault_measures", "measures") if row.get(k) not in (None, "", "-")), None)
             fm = _clean_json_val(fm)
-
-            ip = row.get("impact_parameters")
-            ip = _clean_json_val(ip)
-
-            kp = row.get("key_parameters")
-            kp = _clean_json_val(kp, dash_if_empty=True)
+            ip = _clean_json_val(row.get("impact_parameters"))
+            kp = _clean_json_val(row.get("key_parameters"), dash_if_empty=True)
+            try:
+                risk_score = round(float(row.get("risk_score")), 2)
+            except Exception:
+                risk_score = "-"
+            potential_risk = row.get("potential_risk")
+            if potential_risk in (None, "", "-"):
+                potential_risk = "-"
 
             return {
-                "risk_type": meta["risk_type"],
+                "risk_type": risk_type_label,
                 "ring": ring_num,
-                "project_name": PROJECT_NAME,
+                "project_code": _clean_json_val(row.get("project_code") or project_code_request),
                 "key_parameters": kp,
                 "safety_level": _clean_json_val(safety),
-                "risk_score": _read_float(row, "risk_score", 2),
-                "potential_risk": _clean_json_val(_get_any(row, ["potential_risk"]) or "-"),
+                "risk_score": risk_score,
+                "potential_risk": _clean_json_val(potential_risk),
                 "fault_reason_analysis": _clean_json_val(row.get("fault_reason_analysis")),
                 "fault_cause": _clean_json_val(row.get("fault_cause")),
                 "fault_measures": fm,
                 "impact_parameters": ip,
             }
 
-        meta_map = {
-            "滞排": {
-                "result_key": "clog_risk",
-                "risk_type": "滞排",
-                "fault_cause": "渣土改良不充分导致流动性不佳，最终在管道内发生滞排",
-            },
-            "主驱动密封失效": {
-                "result_key": "mdr_seal_risk",
-                "risk_type": "主驱动密封失效",
-                "fault_cause": "主轴承密封系统因磨损老化或密封油脂压力不足，导致外部渣土或地下水浸入",
-            },
-            "结泥饼": {
-                "result_key": "mud_cake_risk",
-                "risk_type": "结泥饼",
-                "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
-            },
-            "盾尾密封失效": {
-                "result_key": "tail_seal_risk",
-                "risk_type": "盾尾密封失效",
-                "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
-            },
-        }
-
-        result = {}
-
-        if risk_type_param:
-            rp = str(risk_type_param).strip()
-            if rp.endswith("风险"):
-                rp = rp[:-2]
-            meta = meta_map.get(rp)
-            row = rows.get(rp)
-            if meta and row:
-                risk_out = build_risk_out(row, meta)
-                return jsonify(risk_out)
-        else:
-            for label, meta in meta_map.items():
-                row = rows.get(label)
-                if row:
-                    risk_out = build_risk_out(row, meta)
-                    result[meta["result_key"]] = risk_out
-
-        return jsonify(result)
+        return jsonify(build_risk_out(row, rp))
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "error": f"获取最新环数据时发生错误: {str(e)}"}), 500
@@ -1381,11 +1898,9 @@ def get_latest_risk_level():
 @bp.route('/getLatestRiskLevelSimple', methods=['GET'])
 def get_latest_risk_level_simple():
     try:
-        conn = _mysql_connect()
-
         result = {}
-        
-        with conn:
+
+        with _mysql_connect() as conn:
             for k, t in RISK_TABLES.items():
                 # k 是中文风险类型 (例如 "滞排")
                 # t 是对应的表名
@@ -1411,7 +1926,7 @@ def get_latest_risk_level_simple():
                 except Exception:
                     # 单个风险获取失败不应阻塞其他风险
                     continue
-                    
+
         return jsonify(result)
     except Exception as e:
         traceback.print_exc()
@@ -1421,10 +1936,20 @@ def get_latest_risk_level_simple():
 def query_consecutive_ring_data(center_ring, count=6, measurement=None, fields=None):
     try:
         ring_int = int(float(center_ring))
+        target_count = int(count)
+        if target_count <= 1:
+            return query_ring_data(ring_int, measurement=measurement, fields=fields) or []
+
+        start_ring = max(0, ring_int - (target_count - 1))
+        points = query_ring_range_data(start_ring, ring_int + 1, measurement=measurement, fields=fields) or []
+        if points:
+            ring_map = _group_points_by_ring(points)
+            if len(ring_map) >= min(target_count, ring_int + 1):
+                return points
+
         combined = []
         rings_collected = set()
         r = ring_int
-        target_count = int(count)
         while r > 0 and len(rings_collected) < target_count:
             pts = query_ring_data(r, measurement=measurement, fields=fields)
             if pts:
@@ -1462,6 +1987,7 @@ def _rename_keys(items, mapping):
     except Exception:
         return items
 
+
 def _with_value_and_unit(items, unit_map):
     try:
         out = []
@@ -1481,6 +2007,7 @@ def _with_value_and_unit(items, unit_map):
     except Exception:
         return items
 
+
 def _append_units_to_map(data_map, units_map):
     try:
         out = {}
@@ -1495,94 +2022,85 @@ def _append_units_to_map(data_map, units_map):
         return data_map
 
 
-@bp.route('/getAllRiskRecords', methods=['GET'])
+@bp.route('/getAllRiskRecords', methods=['POST'])
 def get_all_risk_records():
     try:
-        conn = _mysql_connect()
-        risk_type_param = request.args.get("risk_type")
-        if not risk_type_param:
-            body = request.get_json(silent=True) or {}
-            risk_type_param = body.get("risk_type")
-        limit_env = int(os.environ.get("RISK_RECORDS_LIMIT", "1000"))
-        max_limit_env = int(os.environ.get("RISK_RECORDS_LIMIT_MAX", "5000"))
-        try:
-            limit_arg = int(request.args.get("limit", str(limit_env)))
-        except Exception:
-            limit_arg = limit_env
-        if limit_arg <= 0:
-            limit_arg = limit_env
-        if limit_arg > max_limit_env:
-            limit_arg = max_limit_env
-        if risk_type_param:
-            rp = str(risk_type_param).strip()
-            if rp.endswith("风险"):
-                rp = rp[:-2]
-            table = RISK_TABLES.get(rp)
-            if not table:
-                return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
-            loop_items = [(rp, table)]
-        else:
-            loop_items = list(RISK_TABLES.items())
+        data, err_resp, err_code = _require_json(
+            [
+                ("shield_id", "缺少 shield_id 参数"),
+                ("risk_type", "缺少 risk_type 参数"),
+            ]
+        )
+        if err_resp is not None:
+            return err_resp, err_code
+        shield_id = data.get("shield_id")
+        risk_type_param = data.get("risk_type")
+
+        rp = str(risk_type_param).strip()
+        table = RISK_TABLES.get(rp)
+        if not table:
+            return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
+
+        _, project_code_request = _resolve_shield_context(shield_id)
+        limit_env = _env_int("RISK_RECORDS_LIMIT", 1000)
+        max_limit_env = _env_int("RISK_RECORDS_LIMIT_MAX", 5000)
+        limit_arg = _normalize_limit(data.get("limit", limit_env), limit_env, max_limit_env)
         records = []
         high_count = 0
         mid_count = 0
         low_count = 0
-        with conn:
+        table_sql = _quote_mysql_identifier(table)
+        with _mysql_connect() as conn:
             with conn.cursor() as cur:
-                for label, table in loop_items:
+                try:
+                    cur.execute(
+                        f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` "
+                        f"FROM {table_sql} WHERE `project_code`=%s ORDER BY `id` DESC LIMIT %s",
+                        (project_code_request, limit_arg),
+                    )
+                    rows = cur.fetchall() or []
+                except Exception:
+                    cur.execute(
+                        f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` "
+                        f"FROM {table_sql} WHERE `project_code`=%s ORDER BY `ring` DESC LIMIT %s",
+                        (project_code_request, limit_arg),
+                    )
+                    rows = cur.fetchall() or []
+
+                for row in rows:
+                    ring_val = row.get("ring")
                     try:
-                        cur.execute(
-                            f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` FROM `{table}` ORDER BY `id` DESC LIMIT %s",
-                            (limit_arg,)
-                        )
-                        rows = cur.fetchall() or []
+                        ring_num = int(float(ring_val)) if ring_val is not None else "-"
                     except Exception:
-                        cur.execute(
-                            f"SELECT `ring`,`warning_time`,`warning_parameters`,`fault_reason`,`fault_measures`,`risk_level` FROM `{table}` ORDER BY `ring` DESC LIMIT %s",
-                            (limit_arg,)
-                        )
-                        rows = cur.fetchall() or []
+                        ring_num = _clean_json_val(ring_val)
 
-                    def _is_target_level(v):
-                        try:
-                            s = str(v)
-                            return ("Ⅱ" in s) or ("Ⅲ" in s) or ("Ⅳ" in s) or ("II" in s) or ("III" in s) or ("IV" in s)
-                        except Exception:
-                            return False
+                    wp = _clean_json_val(row.get("warning_parameters"))
+                    fm = _clean_json_val(row.get("fault_measures"))
 
-                    for row in rows:
-                        ring_val = row.get("ring")
-                        try:
-                            ring_num = int(float(ring_val)) if ring_val is not None else "-"
-                        except Exception:
-                            ring_num = _clean_json_val(ring_val)
-                        
-                        wp = _clean_json_val(row.get("warning_parameters"))
-                        fm = _clean_json_val(row.get("fault_measures"))
-                        
-                        level_raw = row.get("risk_level")
-                        if not _is_target_level(level_raw):
-                            continue
-                        s = str(level_raw)
-                        if ("Ⅳ" in s) or ("IV" in s):
-                            high_count += 1
-                        elif ("Ⅲ" in s) or ("III" in s):
-                            mid_count += 1
-                        elif ("Ⅱ" in s) or ("II" in s):
-                            low_count += 1
-                        level_out = _clean_json_val(level_raw)
-                        fault_reason_out = _clean_json_val(row.get("fault_reason"))
-                        warning_time_out = _clean_json_val(row.get("warning_time"))
-                        rec = {
-                            "risk_type": label,
-                            "warning_time": warning_time_out,
-                            "ring": ring_num,
-                            "warning_parameters": wp,
-                            "risk_level": level_out,
-                            "fault_reason": fault_reason_out,
-                            "fault_measures": fm,
-                        }
-                        records.append(rec)
+                    level_raw = row.get("risk_level")
+                    pri = _risk_priority(str(level_raw) if level_raw is not None else "")
+                    if pri < 2:
+                        continue
+                    if pri == 4:
+                        high_count += 1
+                    elif pri == 3:
+                        mid_count += 1
+                    elif pri == 2:
+                        low_count += 1
+                    level_out = _clean_json_val(level_raw)
+                    fault_reason_out = _clean_json_val(row.get("fault_reason"))
+                    warning_time_out = _clean_json_val(row.get("warning_time"))
+                    rec = {
+                        "risk_type": rp,
+                        "project_code": project_code_request,
+                        "warning_time": warning_time_out,
+                        "ring": ring_num,
+                        "warning_parameters": wp,
+                        "risk_level": level_out,
+                        "fault_reason": fault_reason_out,
+                        "fault_measures": fm,
+                    }
+                    records.append(rec)
 
         def _ring_num(rec):
             r = rec.get("ring")
@@ -1594,6 +2112,8 @@ def get_all_risk_records():
         records.sort(key=lambda rec: _ring_num(rec), reverse=True)
 
         return jsonify({
+            "risk_type": rp,
+            "project_code": project_code_request,
             "records": records,
             "high_risk_count": high_count,
             "mid_risk_count": mid_count,
@@ -1605,84 +2125,117 @@ def get_all_risk_records():
 
 
 _POINT_INFO_POOL = None
+_POINT_INFO_POOL_LOCK = threading.Lock()
+
 
 def _get_point_info_connection():
     global _POINT_INFO_POOL
     if _POINT_INFO_POOL is None:
-        size_env = os.environ.get("POINT_INFO_POOL_SIZE", "5")
-        try:
-            maxsize = int(size_env)
-        except Exception:
-            maxsize = 5
-        _POINT_INFO_POOL = _MySQLConnectionPool(
-            host="172.16.105.12",
-            port=13366,
-            user="root",
-            password="123456",
-            database="point_info",
-            charset="utf8",
-            cursorclass=pymysql.cursors.DictCursor,
-            maxsize=maxsize,
-        )
+        with _POINT_INFO_POOL_LOCK:
+            if _POINT_INFO_POOL is None:
+                maxsize = _env_int("POINT_INFO_POOL_SIZE", 5)
+                _POINT_INFO_POOL = _MySQLConnectionPool(
+                    host=Config.POINT_INFO_MYSQL_HOST,
+                    port=Config.POINT_INFO_MYSQL_PORT,
+                    user=Config.POINT_INFO_MYSQL_USER,
+                    password=Config.POINT_INFO_MYSQL_PASSWORD,
+                    database=Config.POINT_INFO_MYSQL_DATABASE,
+                    charset="utf8",
+                    cursorclass=pymysql.cursors.DictCursor,
+                    maxsize=maxsize,
+                    max_idle=_env_int("POINT_INFO_POOL_MAX_IDLE", 0),
+                )
     raw = _POINT_INFO_POOL.acquire()
+    _set_session_timeout(raw)
     return _PooledConnection(_POINT_INFO_POOL, raw)
+
+
+def _close_mysql_pools():
+    for pool in (_MYSQL_POOL, _POINT_INFO_POOL):
+        if pool is not None:
+            pool.close_all()
+
+
+atexit.register(_close_mysql_pools)
+
+_POINT_INFO_EXCLUDED_TABLES = {"point_info_sum", "point_info_sum_old"}
+
+
+def _list_point_info_tables(conn):
+    cached = _ttl_cache_get("point_info_tables", "__tables__")
+    if cached:
+        return list(cached)
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema=%s AND table_name LIKE 'point_info\\_%%' ESCAPE '\\\\' "
+            "ORDER BY table_name",
+            ("point_info",),
+        )
+        rows = cur.fetchall() or []
+    table_names = []
+    for row in rows:
+        table_name = row.get("table_name") or row.get("TABLE_NAME")
+        if table_name and table_name not in _POINT_INFO_EXCLUDED_TABLES:
+            table_names.append(table_name)
+    _ttl_cache_set("point_info_tables", "__tables__", table_names, ttl_sec=600.0, max_items=8)
+    return table_names
+
+
+def _resolve_point_info_table(shield_id, available_tables):
+    table_name = f"point_info_{shield_id}"
+    if table_name not in available_tables:
+        raise ValueError(f"Unsupported point info table: {table_name}")
+    return table_name
 
 
 @bp.route('/history/parameters', methods=['GET'])
 def get_available_parameters():
     try:
-        shieldid = request.args.get("shieldid")
-        if not shieldid:
-            data = request.get_json(silent=True) or {}
-            shieldid = data.get("shieldid")
-        if not shieldid:
-            shieldid = "tsjy_dz1360"
-        prefix = shieldid
-            
-        table_name = f"point_info_{prefix}"
-        
-        try:
-            conn = _get_point_info_connection()
-
-            with conn:
-                with conn.cursor() as cur:
-                    # Query parameters where point_code, point_cn_name, and point_unit are all valid
-                    query = f"SELECT point_cn_name, point_code, point_unit FROM `{table_name}` WHERE point_unit IS NOT NULL AND point_unit != '' AND point_code IS NOT NULL AND point_code != '' AND point_cn_name IS NOT NULL AND point_cn_name != ''"
-                    cur.execute(query)
-                    rows = cur.fetchall()
-                    
-                    result = []
-                    for row in rows:
-                        result.append({
-                            "name": row['point_cn_name'],
-                            "code": row['point_code'],
-                            "unit": row['point_unit']
-                        })
-                    return jsonify(result)
-        except Exception as e:
-            traceback.print_exc()
-            return jsonify({"status": "error", "error": f"MySQL Query Error: {str(e)}"}), 500
+        shield_id = str(request.args.get("shield_id") or "").strip()
+        if not shield_id:
+            return jsonify({"status": "error", "error": "缺少 shield_id 参数"}), 400
+        cache_key = ("history_parameters", shield_id)
+        cached = _ttl_cache_get("history_parameters", cache_key)
+        if cached is not None:
+            return jsonify(cached)
+        with _get_point_info_connection() as conn:
+            table_name = _resolve_point_info_table(shield_id, _list_point_info_tables(conn))
+            table_sql = _quote_mysql_identifier(table_name)
+            with conn.cursor() as cur:
+                query = f"SELECT point_cn_name, point_code, point_unit FROM {table_sql} WHERE point_unit IS NOT NULL AND point_unit != '' AND point_code IS NOT NULL AND point_code != '' AND point_cn_name IS NOT NULL AND point_cn_name != ''"
+                cur.execute(query)
+                rows = cur.fetchall()
+        result = [
+            {"name": row["point_cn_name"], "code": row["point_code"], "unit": row["point_unit"]}
+            for row in rows
+        ]
+        _ttl_cache_set("history_parameters", cache_key, result, ttl_sec=600.0, max_items=32)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({"status": "error", "error": str(e)}), 400
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "error": f"MySQL Query Error: {str(e)}"}), 500
 
 
 @bp.route('/history/query', methods=['POST'])
 def query_history_data():
     try:
         # 配置常量
-        TARGET_DB_NAME = "tsjy_dz1360_cleanDate"
-        PROJECT_PREFIX = "tsjy_dz1360"
+        TARGET_DB_NAME = Config.HISTORY_TARGET_DB_NAME
+        PROJECT_PREFIX = Config.HISTORY_PROJECT_PREFIX
         MYSQL_TABLE_NAME = f"point_info_{PROJECT_PREFIX}"
-        
+        mysql_table_sql = _quote_mysql_identifier(MYSQL_TABLE_NAME)
+
         # Get parameters from JSON body
         data = request.get_json(silent=True)
         if not data:
             return jsonify({"status": "error", "error": "Missing JSON body"}), 400
-            
+
         start_date_str = data.get("start_date")
         end_date_str = data.get("end_date")
-        
+
         parameters = []
         params_raw = data.get("parameters")
         if isinstance(params_raw, list):
@@ -1700,38 +2253,37 @@ def query_history_data():
 
         if not start_date_str or not end_date_str:
             return jsonify({"status": "error", "error": "Missing 'start_date' or 'end_date' parameter"}), 400
-        
+
         if not parameters:
             return jsonify({"status": "error", "error": "Missing 'parameters' parameter"}), 400
-            
+
         if not (1 <= len(parameters) <= 4):
             return jsonify({"status": "error", "error": "The number of parameters must be between 1 and 4"}), 400
 
         try:
             start_dt_local = pd.to_datetime(start_date_str).tz_localize('Asia/Shanghai')
             end_dt_local = pd.to_datetime(end_date_str).tz_localize('Asia/Shanghai') + timedelta(days=1)
-            
+
             if start_dt_local >= end_dt_local:
                 return jsonify({"status": "error", "error": "start_date cannot be later than end_date"}), 400
-            
+
             start_dt_utc = start_dt_local.tz_convert('UTC')
             end_dt_utc = end_dt_local.tz_convert('UTC')
-                
+
         except ValueError:
             return jsonify({"status": "error", "error": "Invalid date format. Use YYYY-MM-DD"}), 400
 
         point_mapping = {}
-        
+
         cache_key = (MYSQL_TABLE_NAME, tuple(parameters))
         try:
             if cache_key in POINT_MAP_CACHE:
                 point_mapping = POINT_MAP_CACHE.get(cache_key, {})
             else:
-                conn = _get_point_info_connection()
-                with conn:
+                with _get_point_info_connection() as conn:
                     with conn.cursor() as cur:
                         format_strings = ','.join(['%s'] * len(parameters))
-                        query = f"SELECT point_code, point_cn_name, point_unit FROM `{MYSQL_TABLE_NAME}` WHERE point_cn_name IN ({format_strings})"
+                        query = f"SELECT point_code, point_cn_name, point_unit FROM {mysql_table_sql} WHERE point_cn_name IN ({format_strings})"
                         cur.execute(query, tuple(parameters))
                         rows = cur.fetchall()
                         for row in rows:
@@ -1753,36 +2305,38 @@ def query_history_data():
         fields = []
         for p in parameters:
             if p in point_mapping:
-                fields.append(f'"{point_mapping[p]["code"]}"')
-        
+                fields.append(_quote_influx_identifier(point_mapping[p]["code"]))
+
         if not fields:
             return jsonify({"status": "error", "error": "No valid fields to query"}), 400
 
         select_clause = ", ".join(fields)
-        
+
         time_filter = f"time >= '{start_dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}' AND time < '{end_dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}'"
-        
+
         all_points = []
         curr_date = start_dt_local.date() - timedelta(days=1)
         target_end_date = end_dt_local.date() + timedelta(days=1)
-        
+
         measurement_names = []
         while curr_date < target_end_date:
             tn = f"{PROJECT_PREFIX}_DZ1360_{curr_date.strftime('%Y_%m_%d')}"
             measurement_names.append(tn)
             curr_date += timedelta(days=1)
-            
+
         def _q(measurement_name):
-            q = f'SELECT {select_clause} FROM "{measurement_name}" WHERE {time_filter}'
+            measurement_sql = _quote_influx_identifier(measurement_name)
+            q = f'SELECT {select_clause} FROM {measurement_sql} WHERE {time_filter}'
             try:
                 # 使用新的数据库名称 TARGET_DB_NAME
                 res = client.query(q, database=TARGET_DB_NAME, epoch='ms')
                 pts = list(res.get_points())
                 return pts
             except Exception as e:
-                print(f"Error querying {measurement_name}: {e}")
                 return []
-        with ThreadPoolExecutor(max_workers=min(16, len(measurement_names) or 1)) as ex:
+
+        max_workers = _env_int("HISTORY_QUERY_MAX_WORKERS", 8)
+        with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(measurement_names) or 1)) as ex:
             futs = [ex.submit(_q, m) for m in measurement_names]
             for f in as_completed(futs):
                 pts = f.result() or []
@@ -1795,10 +2349,10 @@ def query_history_data():
             info = point_mapping.get(cn_name)
             if info:
                 mapping_info_list.append((cn_name, info['code'], info['unit']))
-        
+
         output_data = []
         tz_offset = timedelta(hours=8)
-        
+
         for pt in all_points:
             ts = pt.get('time')
             # 快速时间格式化 (ts is milliseconds timestamp)
@@ -1820,364 +2374,3 @@ def query_history_data():
         traceback.print_exc()
         return jsonify({"status": "error", "error": str(e)}), 500
 
-
-@bp.route('/filter/options', methods=['GET'])
-def get_filter_options():
-    try:
-        conn = _mysql_connect()
-        risk_type_param = request.args.get('risk_type')
-        if not risk_type_param:
-            body = request.get_json(silent=True) or {}
-            risk_type_param = body.get("risk_type")
-            
-        if not risk_type_param:
-             risk_type_param = '结泥饼风险'
-
-        rp = str(risk_type_param).strip()
-        if rp.endswith("风险"):
-            rp = rp[:-2]
-            
-        table = RISK_TABLES.get(rp)
-        if not table:
-             return jsonify({"status": "error", "error": "不支持的风险类型"}), 400
-
-        safety_level = "无风险Ⅰ"
-        fault_measures = "-"
-        potential_risk = "-"
-        
-        try:
-            with conn:
-                row = _fetch_latest_row(conn, table)
-                if row:
-                    # 优先读取 safety_level，如果为空则读取 risk_level
-                    sl = row.get('safety_level')
-                    if sl and str(sl).strip():
-                        safety_level = sl
-                    else:
-                        safety_level = row.get('risk_level') or "无风险Ⅰ"
-                        
-                    # Match getLatestRiskLevel: check fault_measures then measures
-                    fm = row.get('fault_measures')
-                    if fm in (None, "", "-"):
-                        fm = row.get('measures')
-                    
-                    fault_measures = _clean_json_val(fm)
-        except Exception as e:
-            traceback.print_exc()
-            pass
-            
-        potential_risk = (rp + "预警") if safety_level != "无风险Ⅰ" else "-"
-        
-        return jsonify({
-            "project_name": PROJECT_NAME,
-            "safety_level": safety_level,
-            "potential_risk": potential_risk,
-            "fault_measures": fault_measures
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-
-@bp.route('/info/reverse', methods=['GET'])
-def get_reverse_risk_info():
-    try:
-        conn = _mysql_connect()
-        risk_type_param = request.args.get('risk_type')
-        if not risk_type_param:
-            body = request.get_json(silent=True) or {}
-            risk_type_param = body.get("risk_type")
-            
-        if not risk_type_param:
-             risk_type_param = '结泥饼风险'
-             
-        rp = str(risk_type_param).strip()
-        if rp.endswith("风险"):
-            rp = rp[:-2]
-            
-        table = RISK_TABLES.get(rp)
-        if not table:
-             return jsonify({"status": "error", "error": "不支持的风险类型"}), 400
-             
-        risk_score = 0.0
-        try:
-            with conn:
-                row = _fetch_latest_row(conn, table)
-                if row:
-                     # 优先读取 risk_score
-                     rs = row.get('risk_score')
-                     if rs is not None:
-                         try:
-                             risk_score = float(rs)
-                         except:
-                             pass
-        except Exception:
-            traceback.print_exc()
-            pass
-
-        # Append "风险" for risk_assessor calls
-        full_risk_name = rp + "风险"
-            
-        probability = risk_assessor.reverse_map_score_to_probability(risk_score, full_risk_name)
-        
-        # Determine thresholds based on risk type using the centralized method
-        potential_risk_threshold, normal_probability_threshold = risk_assessor.get_probability_thresholds(full_risk_name)
-            
-        return jsonify({
-            "当前风险概率": round(probability, 3),
-            "潜在风险阈值": potential_risk_threshold,
-            "正常概率阈值": normal_probability_threshold
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-
-CORRELATION_DATA_CACHE = None
-CORRELATION_DATA_LOCK = threading.Lock()
-CORRELATION_MAPS_CACHE = None
-
-def _get_correlation_data():
-    global CORRELATION_DATA_CACHE
-    with CORRELATION_DATA_LOCK:
-        if CORRELATION_DATA_CACHE is None:
-            json_path = os.path.join(os.path.dirname(__file__), 'data', '监测参数关联.json')
-            if not os.path.exists(json_path):
-                return None
-            try:
-                with open(json_path, 'r', encoding='utf-8') as f:
-                    CORRELATION_DATA_CACHE = json.load(f)
-            except Exception as e:
-                traceback.print_exc()
-                return None
-        return CORRELATION_DATA_CACHE
-
-def _get_correlation_maps():
-    global CORRELATION_MAPS_CACHE
-    
-    # Check if maps are already built
-    if CORRELATION_MAPS_CACHE is not None:
-        return CORRELATION_MAPS_CACHE
-        
-    data = _get_correlation_data()
-    if not data:
-        return None, None
-        
-    with CORRELATION_DATA_LOCK:
-        # Double check inside lock
-        if CORRELATION_MAPS_CACHE is not None:
-            return CORRELATION_MAPS_CACHE
-            
-        # Build parameter to system mapping
-        param_system_map = {}
-        if 'nodes' in data:
-            for sys_name, nodes in data['nodes'].items():
-                for node in nodes:
-                    props = node.get('properties', {})
-                    p_name = props.get('name')
-                    if p_name:
-                        param_system_map[p_name] = sys_name
-                        
-        # Build adjacency list for relationships
-        # map: param_name -> list of {name, correlation, direction, level}
-        adjacency_map = {}
-        if 'relationships' in data:
-            for rel in data['relationships']:
-                props = rel.get('properties', {})
-                start_node = props.get('start_node')
-                end_node = props.get('end_node')
-                correlation = props.get('correlation')
-                
-                if not (start_node and end_node and correlation is not None):
-                    continue
-                    
-                item = {
-                    "correlation": float(correlation),
-                    "abs_correlation": abs(float(correlation)),
-                    "direction": props.get("direction"),
-                    "level": props.get("level")
-                }
-                
-                # Add for start_node -> end_node
-                item_start = item.copy()
-                item_start["name"] = end_node
-                if start_node not in adjacency_map:
-                    adjacency_map[start_node] = []
-                adjacency_map[start_node].append(item_start)
-                
-                # Add for end_node -> start_node
-                item_end = item.copy()
-                item_end["name"] = start_node
-                if end_node not in adjacency_map:
-                    adjacency_map[end_node] = []
-                adjacency_map[end_node].append(item_end)
-        
-        CORRELATION_MAPS_CACHE = (param_system_map, adjacency_map)
-        return CORRELATION_MAPS_CACHE
-
-def _get_param_value(keys):
-    try:
-        for k in keys:
-            v = request.args.get(k)
-            if v:
-                return v
-        for k in keys:
-            try:
-                v = request.values.get(k)
-            except Exception:
-                v = None
-            if v:
-                return v
-        body = request.get_json(silent=True)
-        if isinstance(body, dict):
-            for k in keys:
-                v = body.get(k)
-                if v:
-                    return v
-        if not body and request.data:
-            try:
-                raw = json.loads(request.data.decode('utf-8'))
-                if isinstance(raw, dict):
-                    for k in keys:
-                        v = raw.get(k)
-                        if v:
-                            return v
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return None
-
-@bp.route('/correlation/systems', methods=['GET'])
-def get_correlation_systems():
-    try:
-        data = _get_correlation_data()
-        if not data or 'nodes' not in data:
-            return jsonify({"status": "error", "error": "关联数据不可用"}), 500
-        
-        systems = list(data['nodes'].keys())
-        return jsonify({"systems": systems})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@bp.route('/correlation/system_params', methods=['POST'])
-def get_system_params():
-    try:
-        system_name = _get_param_value(['system', 'system_name', 'sys'])
-
-        if not system_name:
-            return jsonify({"status": "error", "error": "Missing system"}), 400
-        system_name = str(system_name).strip()
-            
-        data = _get_correlation_data()
-        if not data or 'nodes' not in data:
-            return jsonify({"status": "error", "error": "关联数据不可用"}), 500
-            
-        nodes = data['nodes'].get(system_name)
-        if not nodes:
-            return jsonify({"system": system_name, "parameters": []})
-            
-        params = []
-        for node in nodes:
-            props = node.get('properties', {})
-            name = props.get('name')
-            if name:
-                params.append(name)
-                
-        return jsonify({"parameters": params})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@bp.route('/correlation/top5', methods=['POST'])
-def get_top5_correlated():
-    try:
-        param_name = _get_param_value(['parameter', 'parameter_name'])
-            
-        if not param_name:
-            return jsonify({"status": "error", "error": "Missing parameter"}), 400
-            
-        param_name = str(param_name).strip()
-
-        param_system_map, adjacency_map = _get_correlation_maps()
-        
-        if param_system_map is None or adjacency_map is None:
-            return jsonify({"status": "error", "error": "关联数据不可用"}), 500
-            
-        correlated = adjacency_map.get(param_name, [])
-                
-        correlated.sort(key=lambda x: x['abs_correlation'], reverse=True)
-        top = correlated[:5]
-        result = {"parameter": param_name}
-        for idx, item in enumerate(top, start=1):
-            # item is shared in cache, create copy before modifying if needed, 
-            # but we just read here. Wait, we popped 'abs_correlation' before.
-            # We should NOT pop from cached objects.
-            
-            p_name = item.get("name")
-            result[str(idx)] = {
-                "name": p_name,
-                "correlation": item.get("correlation"),
-                "direction": item.get("direction"),
-                "level": item.get("level"),
-                "system": param_system_map.get(p_name, "未知系统")
-            }
-        return jsonify(result)
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@bp.route('/get_latest_state', methods=['GET'])
-def get_latest_state():
-    try:
-        target_db = 'tsjy_dz1360_map'
-        # 1. 获取该数据库下的所有 measurements
-        result = client.query('SHOW MEASUREMENTS', database=target_db)
-        measurements = list(result.get_points())
-        
-        # 2. 找到最新的 measurement (格式: tsjy_dz1360_DZ1360_YYYY_MM_DD)
-        # 过滤出符合预期的 measurement 名称
-        m_names = [m['name'] for m in measurements if m['name'].startswith('tsjy_dz1360_DZ1360_')]
-        
-        if not m_names:
-            return jsonify({"state": "-", "time": "-"})
-            
-        # 按字符串排序取最后一个，即日期最新的那个
-        latest_measurement = sorted(m_names)[-1]
-        
-        # 3. 查询最新数据
-        query = f'SELECT state FROM "{latest_measurement}" ORDER BY time DESC LIMIT 1'
-        result = client.query(query, database=target_db)
-        points = list(result.get_points())
-        
-        if points:
-            state_val = points[0].get("state", "-")
-            time_val = points[0].get("time", "-")
-            
-            # 添加备注逻辑
-            remark = "-"
-            try:
-                state_int = int(state_val)
-                if state_int == 0:
-                    remark = "停机"
-                elif state_int == 1:
-                    remark = "掘进"
-                elif state_int == 2:
-                    remark = "拼环"
-            except (ValueError, TypeError):
-                pass
-            
-            # 时间格式转换
-            if time_val != "-":
-                time_val = format_time_utc_to_shanghai(time_val)
-
-            return jsonify({
-                "state": state_val,
-                "time": time_val,
-                "remark": remark
-            })
-        return jsonify({"state": "-", "time": "-", "remark": "-"})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"status": "error", "error": str(e)}), 500
