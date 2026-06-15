@@ -66,9 +66,19 @@ def to_valid_float(value: Any) -> float:
         return 0.0
 
 
+def is_valid_sensor_value(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+    return not (np.isnan(value) or np.isinf(value))
+
+
 def map_project_data(data: Dict[str, Any]) -> Dict[str, float]:
     # 严格校验：如果必要字段缺失，直接抛出异常，而不是默认 0
-    missing = [k for k in UNIFIED_REQUIRED_PARAMS.keys() if k not in data or data[k] is None]
+    missing = [k for k in UNIFIED_REQUIRED_PARAMS.keys() if not is_valid_sensor_value(data.get(k))]
     if missing:
         raise ValueError(f"主驱动密封风险计算缺少必要字段: {', '.join(missing)}")
 

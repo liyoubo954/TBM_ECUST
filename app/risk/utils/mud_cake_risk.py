@@ -11,6 +11,10 @@ import tensorflow as tf
 
 DEFAULT_RANDOM_SEED = 42
 RISK_MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
+MUD_CAKE_MODEL_INFO_FILENAME = "mud_cake_model_info.json"
+MUD_CAKE_AUTOENCODER_FILENAME = "mud_cake_autoencoder.weights.h5"
+MUD_CAKE_ISOLATION_FOREST_FILENAME = "mud_cake_isolation_forest.pkl"
+MUD_CAKE_SCALERS_FILENAME = "mud_cake_scalers.pkl"
 
 TBM_FEATURES = [
     "Thrust.Spd",
@@ -33,9 +37,6 @@ GEO_FEATURES = [
     "泊松比",
     "重型圆锥动力触探锤击数N",
 ]
-
-RUNTIME_MUD_CAKE_FEATURES = TBM_FEATURES + GEO_FEATURES
-SEQUENCE_LENGTH = 6
 
 SORT_CANDIDATE_COLUMNS = [
     "time",
@@ -228,10 +229,26 @@ def build_ring_window_rows(
     smoothing_window: int = 0,
     sort_candidates: List[str] = None,
     timestamp_field: str = "timestamp",
+    allow_partial_window: bool = False,
 ) -> Tuple[List[np.ndarray], List[np.ndarray], List[Any]]:
     ring_df = sort_ring_dataframe(ring_df, sort_candidates=sort_candidates)
     if len(ring_df) < window_points:
-        return [], [], []
+        if not allow_partial_window or len(ring_df) <= 0:
+            return [], [], []
+        values, mask = feature_masked_matrix(ring_df, features)
+        values = smooth_values(values, smoothing_window)
+        packed_values = np.zeros((window_points, len(features)), dtype=float)
+        packed_mask = np.zeros((window_points, len(features)), dtype=bool)
+        point_count = min(len(ring_df), window_points)
+        packed_values[-point_count:, :] = values[-point_count:, :]
+        packed_mask[-point_count:, :] = mask[-point_count:, :]
+        try:
+            end_time = ring_df.iloc[-1].get(timestamp_field, "-")
+        except Exception:
+            end_time = "-"
+        row = np.concatenate([packed_values[:, j] for j in range(len(features))]).astype(float)
+        row_mask = np.concatenate([packed_mask[:, j] for j in range(len(features))]).astype(bool)
+        return [row], [row_mask], [end_time]
     values, mask = feature_masked_matrix(ring_df, features)
     values = smooth_values(values, smoothing_window)
     rows: List[np.ndarray] = []
@@ -274,6 +291,7 @@ def build_multi_ring_sequences(
 
     candidate_rings = rings if rings is not None else df[ring_column].dropna().unique().tolist()
     ordered_rings = sorted(candidate_rings, key=_ring_key)
+    latest_ring = ordered_rings[-1] if ordered_rings else None
 
     ring_window_cache: Dict[Any, Tuple[List[np.ndarray], List[np.ndarray], List[Any]]] = {}
     for ring in ordered_rings:
@@ -286,6 +304,7 @@ def build_multi_ring_sequences(
             smoothing_window=smoothing_window,
             sort_candidates=sort_candidates,
             timestamp_field=timestamp_field,
+            allow_partial_window=(ring != latest_ring),
         )
         if ring_rows:
             ring_window_cache[ring] = (ring_rows, ring_masks, end_times)
@@ -305,30 +324,34 @@ def build_multi_ring_sequences(
         ring_rows_by_ring: List[List[np.ndarray]] = []
         ring_masks_by_ring: List[List[np.ndarray]] = []
         ring_times_by_ring: List[List[Any]] = []
-        group_ring_end_times: List[Any] = []
         for ring in group:
             ring_rows, ring_masks, end_times = ring_window_cache[ring]
             ring_rows_by_ring.append(ring_rows)
             ring_masks_by_ring.append(ring_masks)
             ring_times_by_ring.append(end_times)
-            group_ring_end_times.append(end_times[-1] if end_times else "-")
 
-        aligned_window_count = min(len(ring_rows) for ring_rows in ring_rows_by_ring)
+        if group[-1] == latest_ring:
+            aligned_window_count = len(ring_rows_by_ring[-1])
+        else:
+            aligned_window_count = min(len(ring_rows) for ring_rows in ring_rows_by_ring)
         if aligned_window_count <= 0:
             continue
         for window_idx in range(aligned_window_count):
-            feature_matrix = np.vstack([ring_rows[window_idx] for ring_rows in ring_rows_by_ring])
-            feature_mask = np.vstack([ring_masks[window_idx] for ring_masks in ring_masks_by_ring])
+            feature_matrix = np.vstack([
+                ring_rows[min(window_idx, len(ring_rows) - 1)]
+                for ring_rows in ring_rows_by_ring
+            ])
+            feature_mask = np.vstack([
+                ring_masks[min(window_idx, len(ring_masks) - 1)]
+                for ring_masks in ring_masks_by_ring
+            ])
             normalized = normalize_fn(feature_matrix, feature_mask)
             if normalized.shape[0] != sequence_length:
                 continue
             sequences.append(normalized.astype(np.float32))
             masks.append(feature_mask.astype(bool))
             window_to_ring.append(group[-1])
-            try:
-                window_to_time.append(ring_times_by_ring[-1][window_idx])
-            except Exception:
-                window_to_time.append(group_ring_end_times[-1] if group_ring_end_times else "-")
+            window_to_time.append(ring_times_by_ring[-1][window_idx])
 
     return sequences, masks, window_to_ring, window_to_time
 
@@ -379,6 +402,14 @@ def calibrated_combined_risk(
     if calibration.get("enabled") and calibration.get("ae_error_bounds") and calibration.get("if_anomaly_bounds"):
         norm_err = scale_by_bounds(ae_error, calibration.get("ae_error_bounds", {}))
         norm_if = scale_by_bounds(if_anomaly, calibration.get("if_anomaly_bounds", {}))
+        try:
+            if float(np.max(norm_err) - np.min(norm_err)) < 1e-6:
+                norm_err = minmax(ae_error)
+            if float(np.max(norm_if) - np.min(norm_if)) < 1e-6:
+                norm_if = minmax(if_anomaly)
+        except Exception:
+            norm_err = minmax(ae_error)
+            norm_if = minmax(if_anomaly)
     else:
         norm_err = minmax(ae_error)
         norm_if = minmax(if_anomaly)
@@ -394,10 +425,14 @@ def calibrated_combined_risk(
 def risk_thresholds(config: Dict[str, Any]) -> Dict[str, float]:
     calibration = config.get("risk_calibration", {}) if isinstance(config, dict) else {}
     thresholds = calibration.get("risk_thresholds", {}) if isinstance(calibration, dict) else {}
+    if not isinstance(thresholds, dict) or not thresholds:
+        raise RuntimeError("缺少模型阈值 risk_calibration.risk_thresholds")
+    if "low" not in thresholds or "medium" not in thresholds or "high" not in thresholds:
+        raise RuntimeError("模型阈值 risk_calibration.risk_thresholds 必须包含 low/medium/high")
     return {
-        "low": float(thresholds.get("low", 0.3)),
-        "medium": float(thresholds.get("medium", 0.65)),
-        "high": float(thresholds.get("high", 0.9)),
+        "low": float(thresholds["low"]),
+        "medium": float(thresholds["medium"]),
+        "high": float(thresholds["high"]),
     }
 
 
@@ -632,8 +667,17 @@ class UnsupervisedMudCakeDetector:
 
     def load_models(self) -> bool:
         try:
-            model_info_path = self.model_dir / 'mud_cake_model_info.json'
-            if not model_info_path.exists():
+            model_info_path = self.model_dir / MUD_CAKE_MODEL_INFO_FILENAME
+            weights_path = self.model_dir / MUD_CAKE_AUTOENCODER_FILENAME
+            isolation_forest_path = self.model_dir / MUD_CAKE_ISOLATION_FOREST_FILENAME
+            scalers_path = self.model_dir / MUD_CAKE_SCALERS_FILENAME
+            required_paths = [
+                model_info_path,
+                weights_path,
+                isolation_forest_path,
+                scalers_path,
+            ]
+            if any(not path.exists() for path in required_paths):
                 return False
             with open(model_info_path, 'r', encoding='utf-8') as f:
                 model_info = json.load(f)
@@ -641,25 +685,23 @@ class UnsupervisedMudCakeDetector:
             self.config = model_info['config']
             self.all_features = model_info['features']
             self.feature_dim = model_info['feature_dim']
-            self.autoencoder = AutoEncoder(input_size=self.feature_dim, hidden_size=self.config['autoencoder_params']['hidden_size'], num_layers=self.config['autoencoder_params']['num_layers'], dropout=self.config['autoencoder_params']['dropout'])
+            ae_params = self.config['autoencoder_params']
+            self.autoencoder = AutoEncoder(
+                input_size=self.feature_dim,
+                hidden_size=ae_params['hidden_size'],
+                num_layers=ae_params['num_layers'],
+                dropout=ae_params['dropout'],
+                l2=float(ae_params.get('l2', 0.0)),
+            )
             dummy = tf.zeros((1, int(self.config['sequence_length']), int(self.feature_dim)))
             _ = self.autoencoder(dummy, training=False)
-            weights_path = self.model_dir / 'mud_cake_autoencoder.weights.h5'
-            if not weights_path.exists():
-                weights_path = self.model_dir / 'mud_cake_autoencoder.h5'
             self.autoencoder.load_weights(weights_path)
-            self.isolation_forest = joblib.load(self.model_dir / 'mud_cake_isolation_forest.pkl')
-            try:
-                scalers_pack = joblib.load(self.model_dir / 'mud_cake_scalers.pkl')
-                if isinstance(scalers_pack, dict):
-                    self.robust_scalers = scalers_pack.get('robust', {})
-                    self.scalers = scalers_pack.get('standard', {})
-                else:
-                    # 兼容旧模型：仅标准化器
-                    self.scalers = scalers_pack
-            except Exception:
-                self.robust_scalers = {}
-                self.scalers = {}
+            self.isolation_forest = joblib.load(isolation_forest_path)
+            scalers_pack = joblib.load(scalers_path)
+            if not isinstance(scalers_pack, dict):
+                raise ValueError("mud_cake_scalers.pkl 格式错误，必须为 dict")
+            self.robust_scalers = scalers_pack.get('robust', {})
+            self.scalers = scalers_pack.get('standard', {})
             return True
         except Exception as e:
             print(f"加载模型失败: {e}")
@@ -668,8 +710,7 @@ class UnsupervisedMudCakeDetector:
 
 class MudCakeRiskCalculator:
 
-    def __init__(self, model_type: str = 'unified', model_dir: str = None):
-        self.model_type = model_type
+    def __init__(self, model_dir: str = None):
         self.detector = UnsupervisedMudCakeDetector()
         if model_dir is not None:
             self.detector.model_dir = Path(model_dir)
@@ -709,110 +750,6 @@ class MudCakeRiskCalculator:
                 return float(np.mean(np.array(values, dtype=float)))
             except Exception:
                 return 0.0
-
-    @staticmethod
-    def _suffix_run(flags: List[bool]) -> int:
-        cur = 0
-        for flag in reversed(flags):
-            if not flag:
-                break
-            cur += 1
-        return cur
-
-    def _normal_only_postprocess(
-        self,
-        combined: np.ndarray,
-        per_ring: List[Dict[str, Any]],
-        final_level: str,
-    ) -> Tuple[str, Dict[str, Any]]:
-        cfg = self.detector.config.get('risk_postprocessing', {}) if hasattr(self.detector, 'config') else {}
-        if not cfg.get('normal_only_training', False):
-            return final_level, {'persistence_confirmed': True, 'suppressed_as_isolated': False}
-
-        thresholds = risk_thresholds(self.detector.config)
-        combined_list = [float(v) for v in np.asarray(combined, dtype=float).tolist()]
-        ring_scores = [float(item.get('combined_risk', 0.0)) for item in per_ring]
-
-        min_low_windows = int(cfg.get('min_consecutive_windows_for_low', 2) or 2)
-        min_medium_windows = int(cfg.get('min_consecutive_windows_for_medium', 4) or 4)
-        min_high_windows = int(cfg.get('min_consecutive_windows_for_high', 6) or 6)
-        min_medium_rings = int(cfg.get('min_consecutive_rings_for_medium', 2) or 2)
-        min_high_rings = int(cfg.get('min_consecutive_rings_for_high', 3) or 3)
-        isolated_level = str(cfg.get('downgrade_isolated_level', 'no_risk') or 'no_risk')
-
-        low_window_run = self._suffix_run([v >= thresholds['low'] for v in combined_list])
-        medium_window_run = self._suffix_run([v >= thresholds['medium'] for v in combined_list])
-        high_window_run = self._suffix_run([v >= thresholds['high'] for v in combined_list])
-        medium_ring_run = self._suffix_run([v >= thresholds['medium'] for v in ring_scores])
-        high_ring_run = self._suffix_run([v >= thresholds['high'] for v in ring_scores])
-
-        confirmed_level = 'no_risk'
-        if high_window_run >= min_high_windows and high_ring_run >= min_high_rings:
-            confirmed_level = 'high'
-        elif medium_window_run >= min_medium_windows and medium_ring_run >= min_medium_rings:
-            confirmed_level = 'medium'
-        elif low_window_run >= min_low_windows:
-            confirmed_level = 'low'
-
-        order = {'no_risk': 0, 'low': 1, 'medium': 2, 'high': 3}
-        if order.get(confirmed_level, 0) < order.get(final_level, 0):
-            final_level = isolated_level if confirmed_level == 'no_risk' else confirmed_level
-            suppressed = True
-        else:
-            suppressed = False
-
-        return final_level, {
-            'persistence_confirmed': not suppressed,
-            'suppressed_as_isolated': suppressed,
-            'suffix_window_runs': {
-                'low': int(low_window_run),
-                'medium': int(medium_window_run),
-                'high': int(high_window_run),
-            },
-            'suffix_ring_runs': {
-                'medium': int(medium_ring_run),
-                'high': int(high_ring_run),
-            },
-        }
-
-    def _postprocess_per_ring_levels(self, per_ring: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        cfg = self.detector.config.get('risk_postprocessing', {}) if hasattr(self.detector, 'config') else {}
-        if not cfg.get('normal_only_training', False) or not per_ring:
-            return per_ring
-        thresholds = risk_thresholds(self.detector.config)
-        min_medium = int(cfg.get('min_consecutive_rings_for_medium', 2) or 2)
-        min_high = int(cfg.get('min_consecutive_rings_for_high', 3) or 3)
-        scores = [float(item.get('combined_risk', 0.0)) for item in per_ring]
-
-        def run_lengths(flags: List[bool]) -> List[int]:
-            lengths = [0] * len(flags)
-            i = 0
-            while i < len(flags):
-                if not flags[i]:
-                    i += 1
-                    continue
-                j = i
-                while j < len(flags) and flags[j]:
-                    j += 1
-                for k in range(i, j):
-                    lengths[k] = j - i
-                i = j
-            return lengths
-
-        high_runs = run_lengths([v >= thresholds['high'] for v in scores])
-        medium_runs = run_lengths([v >= thresholds['medium'] for v in scores])
-        out = []
-        for item, high_run, medium_run in zip(per_ring, high_runs, medium_runs):
-            updated = dict(item)
-            level = str(updated.get('risk_level', 'no_risk'))
-            if level == 'high' and high_run < min_high:
-                updated['risk_level'] = 'low' if updated.get('combined_risk', 0.0) >= thresholds['low'] else 'no_risk'
-                updated['suppressed_as_isolated'] = True
-            elif level == 'medium' and medium_run < min_medium:
-                updated['risk_level'] = 'low' if updated.get('combined_risk', 0.0) >= thresholds['low'] else 'no_risk'
-                updated['suppressed_as_isolated'] = True
-            out.append(updated)
-        return out
 
     def calculate_ring_risk_sequence(self, sequence_points: List[Dict[str, Any]]) -> Dict[str, Any]:
         try:
@@ -966,8 +903,6 @@ class MudCakeRiskCalculator:
                 final_vals = [float(combined[i]) for i in last_indices]
                 final_risk = self._aggregate_values(final_vals, final_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
                 final_level = risk_level_from_score(final_risk, self.detector.config)
-            per_ring = self._postprocess_per_ring_levels(per_ring)
-            final_level, postprocess_info = self._normal_only_postprocess(combined, per_ring, final_level)
             earliest_time = '-'
             earliest_ring = (int(last_ring) if last_ring is not None else None)
             if last_ring is not None:
@@ -986,7 +921,6 @@ class MudCakeRiskCalculator:
                 'earliest_time': earliest_time,
                 'earliest_ring': (int(last_ring) if last_ring is not None else None),
                 'per_ring': per_ring,
-                'postprocessing': postprocess_info,
             }
         except Exception as e:
             return {'status': 'error', 'message': f'序列评估失败: {str(e)}'}
@@ -1007,22 +941,20 @@ class StratumMudCakeRiskCalculator:
     def load_models(self) -> bool:
         if not self.model_root.exists():
             return False
+        tf.keras.backend.clear_session()
         for model_dir in sorted(self.model_root.glob("cluster_*")):
             if not model_dir.is_dir():
                 continue
             label = model_dir.name.replace("cluster_", "", 1)
             required = [
-                model_dir / "mud_cake_isolation_forest.pkl",
-                model_dir / "mud_cake_model_info.json",
-                model_dir / "mud_cake_scalers.pkl",
+                model_dir / MUD_CAKE_MODEL_INFO_FILENAME,
+                model_dir / MUD_CAKE_AUTOENCODER_FILENAME,
+                model_dir / MUD_CAKE_ISOLATION_FOREST_FILENAME,
+                model_dir / MUD_CAKE_SCALERS_FILENAME,
             ]
-            has_weights = (
-                (model_dir / "mud_cake_autoencoder.weights.h5").exists()
-                or (model_dir / "mud_cake_autoencoder.h5").exists()
-            )
-            if not has_weights or any(not path.exists() for path in required):
+            if any(not path.exists() for path in required):
                 continue
-            calc = MudCakeRiskCalculator(model_type="stratum_specific", model_dir=str(model_dir))
+            calc = MudCakeRiskCalculator(model_dir=str(model_dir))
             if calc.detector.autoencoder is None or calc.detector.isolation_forest is None:
                 continue
             features = list(getattr(calc.detector, "all_features", []) or [])

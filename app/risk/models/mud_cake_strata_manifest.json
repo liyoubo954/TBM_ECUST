@@ -1,4 +1,4 @@
-{
+ {
   "learning_type": "unsupervised_normal_only",
   "training_mode": "stratum_specific",
   "selector_feature": "Cluster_Label",

@@ -98,7 +98,17 @@ RISK_SPEC = {
 
 
 def _to_sensor_value(value: Any) -> float:
-    return float(value) if value is not None and isinstance(value, (int, float)) else np.nan
+    return float(value) if _is_valid_sensor_value(value) else np.nan
+
+
+def _is_valid_sensor_value(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+    return not (np.isnan(value) or np.isinf(value))
 
 
 def _get_sensor_raw_value(data: Dict[str, Any], sensor_key: str) -> Any:
@@ -112,21 +122,22 @@ def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
         'seal_pressures': [],
         'grout_pressures': []
     }
-    
+
     # 严格校验：如果所有的密封压力传感器或者注浆压力传感器都在数据中缺失，则抛出异常
-    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if _get_sensor_raw_value(data, s) is None]
-    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if _get_sensor_raw_value(data, s) is None]
-    
+    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if not _is_valid_sensor_value(_get_sensor_raw_value(data, s))]
+    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if not _is_valid_sensor_value(_get_sensor_raw_value(data, s))]
+
     if len(missing_seal) == len(UNIFIED_SEAL_SENSORS) and len(missing_grout) == len(UNIFIED_GROUT_SENSORS):
-         raise ValueError("盾尾密封风险计算缺少所有压力数据")
+        raise ValueError("盾尾密封风险计算缺少所有压力数据")
 
     for sensor in UNIFIED_SEAL_SENSORS:
         mapped_data['seal_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
-            
+
     for sensor in UNIFIED_GROUT_SENSORS:
         mapped_data['grout_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
-            
+
     return mapped_data
+
 
 def calculate_universal_tail_seal_risk(data: Dict[str, Any]) -> Dict[str, Any]:
     try:

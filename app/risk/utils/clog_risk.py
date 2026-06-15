@@ -1,6 +1,10 @@
 import numpy as np
 from typing import Dict, Any
 
+LOW_RISK_PROBABILITY = 0.3
+MEDIUM_RISK_PROBABILITY = 0.7
+HIGH_RISK_PROBABILITY = 0.9
+
 UNIFIED_REQUIRED_PARAMS = {
     'WorkCham.Prs.01': '1#工作仓压力',
     'ExcCham.Prs.04': '4#开挖仓压力',
@@ -22,7 +26,7 @@ RISK_SPEC = {
         "排浆泵P2.1进口压力": "bar",            
     },
     "score_points": [(0.0, 4.0), (0.3, 3.5), (0.7, 2.0), (0.9, 0.5), (1.0, 0.0)],
-    "probability_thresholds": (0.7, 0.3),
+    "probability_thresholds": (MEDIUM_RISK_PROBABILITY, LOW_RISK_PROBABILITY),
     "fault_reason_analysis": {
         "无风险Ⅰ": "开挖仓压力与工作仓压力稳定，排浆泵P2.1进口压力处于正常区间，压力梯度合理、流态均匀。渣土含水率与改良剂配比匹配，管路内无沉积或团聚迹象，排量连续可控。",
         "低风险Ⅱ": "管路摩阻略增，泵出口与进口压力出现轻微非同步波动，短时排量下降提示流动性边界化。渣土可能存在剪切变稀临界、团聚核初始形成或颗粒级配偏离，需关注参数微调以避免在弯头、缩径或高阻段形成稳定堵塞核。",
@@ -50,49 +54,64 @@ RISK_SPEC = {
 }
 
 
-def to_valid_float(value: Any) -> float:
-    try:
-        if value is None:
-            return 0.0
-        value = float(value)
-        if np.isnan(value) or np.isinf(value):
-            return 0.0
-        return value
-    except (TypeError, ValueError):
-        return 0.0
-
-
 def is_valid_sensor_value(value: Any) -> bool:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return False
-    if isinstance(value, (int, float)):
-        return not np.isnan(value)
-    return False
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+    if np.isnan(value) or np.isinf(value):
+        return False
+    return True
+
+
+def to_nonnegative_float(value: Any):
+    if not is_valid_sensor_value(value):
+        return None
+    value = float(value)
+    return value if value >= 0 else None
+
+
+def map_project_data(data: Dict[str, Any]):
+    if not isinstance(data, dict):
+        return None
+
+    values = {
+        'P_bubble': to_nonnegative_float(data.get('WorkCham.Prs.01')),
+        'P_excav': to_nonnegative_float(data.get('ExcCham.Prs.04')),
+        'P_pump': to_nonnegative_float(data.get('DischPump.P2.1.In.Prs')),
+    }
+    if any(value is None for value in values.values()):
+        return None
+    return {
+        key: float(value)
+        for key, value in values.items()
+    }
 
 
 def calculate_universal_clog_risk(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        missing = [k for k in UNIFIED_REQUIRED_PARAMS if not is_valid_sensor_value(data.get(k))]
-        if missing:
-            raise ValueError(f"滞排风险计算缺少必要字段: {', '.join(missing)}")
-
-        P_bubble = to_valid_float(data.get('WorkCham.Prs.01'))
-        P_excav = to_valid_float(data.get('ExcCham.Prs.04'))
-        P_pump = to_valid_float(data.get('DischPump.P2.1.In.Prs'))
+        mapped = map_project_data(data)
+        if not isinstance(mapped, dict):
+            return None
+        P_bubble = mapped['P_bubble']
+        P_excav = mapped['P_excav']
+        P_pump = mapped['P_pump']
 
         diff_bubble_exc = P_bubble - P_excav
         diff_bubble_pump = P_bubble - P_pump
 
         if diff_bubble_exc < -1 and diff_bubble_pump > 2:
-            risk_level, msg, prob = '高风险', '泥水环流系统滞排现象严重', 0.9
+            risk_level, msg, prob = '高风险', '泥水环流系统滞排现象严重', HIGH_RISK_PROBABILITY
         elif diff_bubble_exc < -1:
-            risk_level, msg, prob = '中风险', '开挖舱内明显滞排', 0.7
+            risk_level, msg, prob = '中风险', '开挖舱内明显滞排', MEDIUM_RISK_PROBABILITY
         elif diff_bubble_pump > 2:
-            risk_level, msg, prob = '中风险', '泥水脱离格栅处明显滞排', 0.7
+            risk_level, msg, prob = '中风险', '泥水脱离格栅处明显滞排', MEDIUM_RISK_PROBABILITY
         elif -1 <= diff_bubble_exc <= -0.5:
-            risk_level, msg, prob = '低风险', '开挖舱内轻微滞排', 0.3
+            risk_level, msg, prob = '低风险', '开挖舱内轻微滞排', LOW_RISK_PROBABILITY
         elif 1 <= diff_bubble_pump <= 2:
-            risk_level, msg, prob = '低风险', '泥水脱离格栅处轻微滞排', 0.3
+            risk_level, msg, prob = '低风险', '泥水脱离格栅处轻微滞排', LOW_RISK_PROBABILITY
         else:
             risk_level, msg, prob = '无风险', '泥水环流系统无滞排风险', 0.0
 
@@ -101,5 +120,5 @@ def calculate_universal_clog_risk(data: Dict[str, Any]) -> Dict[str, Any]:
             'risk_level': risk_level,
             'details': f"{msg} (ΔP_仓={diff_bubble_exc:.2f}, ΔP_泵={diff_bubble_pump:.2f})"
         }
-    except Exception as e:
-        raise RuntimeError(f"滞排风险评估失败: {str(e)}")
+    except Exception:
+        return None

@@ -66,9 +66,9 @@
     },
     "risk_calibration": {
       "enabled": true,
-      "low_quantile": 0.99,
-      "medium_quantile": 0.999,
-      "high_quantile": 0.9997,
+      "low_quantile": 0.95,
+      "medium_quantile": 0.995,
+      "high_quantile": 0.999,
       "scale_low_quantile": 0.5,
       "scale_high_quantile": 0.999,
       "include_test_normal": true,
@@ -81,9 +81,9 @@
         "high": 0.11062485602666818
       },
       "risk_thresholds": {
-        "low": 0.6359994864460478,
-        "medium": 0.73937859479338,
-        "high": 0.7536959605067965
+        "low": 0.43,
+        "medium": 0.67,
+        "high": 0.73
       },
       "calibration_sample_count": 2744
     },

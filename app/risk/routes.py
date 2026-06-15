@@ -16,14 +16,11 @@ from app.risk.utils.mud_cake_risk import (
     GEO_FEATURES,
     TBM_FEATURES,
     RISK_SPEC as MUD_CAKE_RISK_SPEC,
-    MudCakeRiskCalculator,
     StratumMudCakeRiskCalculator,
 )
 import traceback
 import os
 import json
-import hashlib
-import random
 import re
 import time
 import pandas as pd
@@ -166,19 +163,19 @@ RISK_DISPLAY_FIELDS = {
     "tail_seal_risk": list(TAIL_SEAL_RISK_SPEC["fields"]),
 }
 
+TAIL_SEAL_KEY_PARAMETER_FIELDS = [
+    "LiqPump.A.Out.Prs.01",
+    "LiqPump.A.Out.Prs.02",
+    "Tail.Seal.Rear.Prs.02",
+    "Tail.Seal.Rear.Prs.04",
+]
+
 RISK_TABLES = {
     "滞排": "clog_risk",
     "主驱动密封失效": "mdr_seal_risk",
     "结泥饼": "mud_cake_risk",
     "盾尾密封失效": "tail_seal_risk",
 }
-
-
-def _risk_table_from_query(default_risk_type="结泥饼风险"):
-    risk_type = request.args.get("risk_type") or default_risk_type
-    risk_type = str(risk_type).strip()
-    risk_key = risk_type[:-2] if risk_type.endswith("风险") else risk_type
-    return risk_key, RISK_TABLES.get(risk_key)
 
 
 RISK_OUTPUT_SPECS = {
@@ -274,34 +271,6 @@ def _interpolate_score_from_probability(probability, score_points):
     return float(points[-1][1])
 
 
-def _interpolate_probability_from_score(score, score_points):
-    s = max(0.0, min(4.0, float(score or 0.0)))
-    points = sorted(score_points, key=lambda item: item[0])
-    if s >= points[0][1]:
-        return float(points[0][0])
-    if s <= points[-1][1]:
-        return float(points[-1][0])
-    for (p0, s0), (p1, s1) in zip(points, points[1:]):
-        upper, lower = max(s0, s1), min(s0, s1)
-        if lower <= s <= upper:
-            ratio = (s - s0) / (s1 - s0) if abs(s1 - s0) > 1e-9 else 0.0
-            return float(p0 + ratio * (p1 - p0))
-    return 0.0
-
-
-def _stable_uniform_0_upper(seed_key: str, upper: float) -> float:
-    try:
-        u = max(0.0, float(upper or 0.0))
-        if u <= 0.0:
-            return 0.0
-        digest = hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()
-        seed = int(digest[:8], 16)
-        rng = random.Random(seed)
-        return float(rng.uniform(0.0, u))
-    except Exception:
-        return 0.0
-
-
 def _measures_and_reason(risk_level, risk_type):
     config = _risk_config_by_type(risk_type)
     item = (config or {}).get("measures", {}).get(risk_level, {})
@@ -326,15 +295,11 @@ def _source_key(value):
     return str(value).strip()
 
 
-def _source_candidates(shield_id=None, project_code=None, request_data=None):
+def _source_candidates(shield_id=None, project_code=None):
     candidates = []
     for value in (
             shield_id,
             project_code,
-            (request_data or {}).get("project_code") if isinstance(request_data, dict) else None,
-            (request_data or {}).get("project") if isinstance(request_data, dict) else None,
-            (request_data or {}).get("source_file") if isinstance(request_data, dict) else None,
-            (request_data or {}).get("Source_File") if isinstance(request_data, dict) else None,
     ):
         key = _source_key(value)
         if not key:
@@ -397,46 +362,44 @@ def _load_project_geo_ring_cache():
     return GEO_SOURCE_RING_CACHE
 
 
+
+def _default_project_geo(ring=None):
+    item = {"Cluster_Label": 0}
+    if ring is not None:
+        try:
+            item["Ring.No"] = int(float(ring))
+        except Exception:
+            pass
+    for feature in GEO_FEATURES:
+        item[feature] = 0.0
+    return item
+
+
 def _lookup_project_geo(ring, source_candidates):
     try:
         ring = int(float(ring))
     except Exception:
-        return {}
+        return _default_project_geo()
     cache = _load_project_geo_ring_cache()
-    for source in source_candidates or []:
-        source = _source_key(source)
+    for raw_source in source_candidates or []:
+        source = _source_key(raw_source)
         if not source:
             continue
-        direct = cache.get(source, {}).get(ring)
-        if direct:
-            return direct
+        to_try = [source]
         alias = SOURCE_FILE_ALIASES.get(source)
-        if alias:
-            direct = cache.get(alias, {}).get(ring)
+        if alias and alias != source:
+            to_try.append(alias)
+        for key in to_try:
+            direct = cache.get(key, {}).get(ring)
             if direct:
-                return direct
-    return {}
-
-
-def _with_current_ring_cluster(points, geo):
-    if not geo or not isinstance(points, list) or not points:
-        return points
-    cluster = geo.get("Cluster_Label")
-    if cluster in (None, "", "-"):
-        return points
-    enriched = list(points)
-    last = enriched[-1]
-    if isinstance(last, dict):
-        item = dict(last)
-        if item.get("Cluster_Label") in (None, "", "-"):
-            item["Cluster_Label"] = cluster
-        enriched[-1] = item
-    return enriched
+                cl = direct.get("Cluster_Label")
+                if cl is not None and not pd.isna(cl):
+                    return direct
+                return _default_project_geo(ring)
+    return _default_project_geo(ring)
 
 
 def _enrich_points_with_geo(points, source_candidates=None):
-    if not source_candidates:
-        return points
     if not isinstance(points, list):
         return points
     enriched = []
@@ -454,12 +417,11 @@ def _enrich_points_with_geo(points, source_candidates=None):
             continue
         if ring not in geo_by_ring:
             geo_by_ring[ring] = _lookup_project_geo(ring, source_candidates)
-        geo = geo_by_ring.get(ring) or {}
+        geo = geo_by_ring.get(ring) or _default_project_geo(ring)
         for feature, value in geo.items():
             if feature in ("Ring.No", "Source_File"):
                 continue
-            if item.get(feature) in (None, "", "-"):
-                item[feature] = value
+            item[feature] = value
         enriched.append(item)
     return enriched
 
@@ -482,6 +444,7 @@ def _build_select_clause(fields):
     return ", ".join([_quote_influx_identifier(field) for field in safe_fields]) if safe_fields else "*"
 
 
+
 def _risk_query_fields():
     cached = _ttl_cache_get("risk_level_result", "__risk_query_fields__")
     if cached:
@@ -490,7 +453,7 @@ def _risk_query_fields():
     for cfg in RISK_CONFIG.values():
         for field in cfg.get("fields", []) or []:
             fields.add(field)
-    fields.update({"state", "Ring.No", "Cluster_Label"})
+    fields.add("Ring.No")
     out = sorted(fields)
     _ttl_cache_set("risk_level_result", "__risk_query_fields__", out, ttl_sec=3600.0, max_items=16)
     return out
@@ -501,6 +464,12 @@ def _risk_display_fields(risk_config_key):
     if fields:
         return list(fields)
     return list(RISK_CONFIG.get(risk_config_key, {}).get("fields", []) or [])
+
+
+def _risk_key_parameter_fields(risk_config_key):
+    if risk_config_key == "tail_seal_risk":
+        return list(TAIL_SEAL_KEY_PARAMETER_FIELDS)
+    return _risk_display_fields(risk_config_key)
 
 
 def _risk_display_impact(risk_config_key):
@@ -573,6 +542,7 @@ def _find_earliest_warning_from_point_results(point_results, consecutive_n):
     return None, None
 
 
+
 class RiskAssessor:
     def __init__(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -587,51 +557,16 @@ class RiskAssessor:
             if calculator.calculators:
                 self.mud_cake_calculator = calculator
                 return
-
-        required_files = [
-            'mud_cake_isolation_forest.pkl',
-            'mud_cake_model_info.json',
-            'mud_cake_scalers.pkl'
-        ]
-        missing_files = [
-            file for file in required_files
-            if not os.path.exists(os.path.join(self.model_dir, file))
-        ]
-        if not (
-                os.path.exists(os.path.join(self.model_dir, 'mud_cake_autoencoder.weights.h5'))
-                or os.path.exists(os.path.join(self.model_dir, 'mud_cake_autoencoder.h5'))
-        ):
-            missing_files.append('mud_cake_autoencoder.weights.h5')
-
-        if missing_files:
-            self.mud_cake_calculator = None
-        else:
-            self.mud_cake_calculator = MudCakeRiskCalculator(model_type='unified', model_dir=self.model_dir)
+        self.mud_cake_calculator = None
 
     def _format_mud_cake_point(self, point):
         property_dict = {}
         try:
             feature_list = list(getattr(self.mud_cake_calculator, 'all_features', []) or [])
-            if not feature_list and self.mud_cake_calculator and hasattr(self.mud_cake_calculator, 'detector'):
-                feature_list = list(getattr(self.mud_cake_calculator.detector, 'all_features', []) or [])
             if not feature_list:
-                feature_list = [
-                    'Thrust.Spd',
-                    'Thrust.Force',
-                    'CH.Spd',
-                    'CH.Torque',
-                    'CH.Tot.ContactForce',
-                    'Cluster_Label',
-                ]
+                feature_list = list(TBM_FEATURES) + list(GEO_FEATURES) + ["Cluster_Label"]
         except Exception:
-            feature_list = [
-                'Thrust.Spd',
-                'Thrust.Force',
-                'CH.Spd',
-                'CH.Torque',
-                'CH.Tot.ContactForce',
-                'Cluster_Label',
-            ]
+            feature_list = list(TBM_FEATURES) + list(GEO_FEATURES) + ["Cluster_Label"]
 
         for field in feature_list:
             if field in ('RING', 'state'):
@@ -641,14 +576,11 @@ class RiskAssessor:
                 if val is not None and val != '' and not pd.isna(val):
                     property_dict[field] = float(val)
                 else:
-                    property_dict[field] = 0.0
+                    property_dict[field] = 0.0 if field in GEO_FEATURES or field == "Cluster_Label" else None
             except Exception:
-                property_dict[field] = 0.0
-        if "Cluster_Label" not in property_dict and point.get("Cluster_Label") not in (None, "", "-"):
-            try:
-                property_dict["Cluster_Label"] = float(point.get("Cluster_Label"))
-            except Exception:
-                property_dict["Cluster_Label"] = point.get("Cluster_Label")
+                property_dict[field] = 0.0 if field in GEO_FEATURES or field == "Cluster_Label" else None
+        if "Cluster_Label" not in property_dict:
+            property_dict["Cluster_Label"] = 0.0
 
         formatted = {
             'property': property_dict,
@@ -661,19 +593,11 @@ class RiskAssessor:
 
     def assess_mud_cake_risk_sequence(self, ring_points):
         if self.mud_cake_calculator is None:
-            return self._fallback_no_risk_for_missing_fields(
-                {},
-                "结泥饼风险",
-                ["Cluster_Label"] + list(TBM_FEATURES),
-            )
+            return None
         points = [p for p in ring_points if isinstance(p, dict)]
         points.sort(key=lambda x: x.get('time'))
         if not points:
-            return self._fallback_no_risk_for_missing_fields(
-                {},
-                "结泥饼风险",
-                ["Cluster_Label"] + list(TBM_FEATURES),
-            )
+            return None
 
         ring_vals = []
         for p in points:
@@ -682,6 +606,9 @@ class RiskAssessor:
                 ring_vals.append(int(float(rv)))
             except Exception:
                 continue
+        if len(set(ring_vals)) < MUD_CAKE_SEQUENCE_RING_COUNT:
+            return None
+
         current_ring = max(ring_vals) if ring_vals else None
         current_points = []
         if current_ring is not None:
@@ -693,7 +620,9 @@ class RiskAssessor:
                 except Exception:
                     continue
         if not current_points:
-            current_points = points[-1:]
+            return None
+        if len(current_points) < 48:
+            return None
 
         def _valid(v):
             try:
@@ -701,65 +630,74 @@ class RiskAssessor:
             except Exception:
                 return v not in (None, "", "-")
 
-        missing = []
-        has_cluster = any(_valid(p.get("Cluster_Label")) for p in current_points)
-        if not has_cluster:
-            missing.append("Cluster_Label")
         for f in TBM_FEATURES:
             if not any(_valid(p.get(f)) for p in current_points):
-                missing.append(f)
-        if missing:
-            ref = current_points[-1] if current_points else {}
-            fallback_data = {
-                "Ring.No": ref.get("Ring.No", ref.get("RING", current_ring)),
-                "time": ref.get("time"),
-            }
-            return self._fallback_no_risk_for_missing_fields(fallback_data, "结泥饼风险", missing)
+                return None
+
+        cluster_label = 0
+        for p in current_points:
+            if _valid(p.get("Cluster_Label")):
+                cluster_label = p.get("Cluster_Label")
+                break
 
         sequence = [self._format_mud_cake_point(p) for p in points]
         if not sequence:
-            return self._fallback_no_risk_for_missing_fields(
-                {"Ring.No": current_ring, "time": points[-1].get("time")},
-                "结泥饼风险",
-                ["Cluster_Label"] + list(TBM_FEATURES),
-            )
+            return None
+
         try:
-            result = self.mud_cake_calculator.calculate_ring_risk_sequence(sequence)
+            result = self.mud_cake_calculator.calculate_ring_risk_sequence_for_label(sequence, cluster_label)
+        except Exception as exc:
+            raise RuntimeError(f"结泥饼模型调用异常: {exc}") from exc
+
+        if not isinstance(result, dict):
+            raise RuntimeError("结泥饼模型返回结果格式错误")
+        if result.get('status') != 'success':
+            raise RuntimeError(result.get('message') or "结泥饼模型评估失败")
+
+        try:
+            probability = float(result.get('combined_risk', 0.0))
         except Exception:
-            result = None
-        if not (isinstance(result, dict) and result.get('status') == 'success'):
-            return self._fallback_no_risk_for_missing_fields(
-                {"Ring.No": current_ring, "time": points[-1].get("time")},
-                "结泥饼风险",
-                ["Cluster_Label"] + list(TBM_FEATURES),
-            )
-        probability = float(result.get('combined_risk', 0.0))
-        risk_level_direct = result.get('risk_level', '无风险')
+            probability = 0.0
+        if probability < 0.0:
+            probability = 0.0
+        elif probability > 1.0:
+            probability = 1.0
+        probability = round(probability, 2)
+        risk_level_direct = result.get('risk_level', 'no_risk')
+        risk_level, measures, reason, potential_risk = self._get_model_level_and_measures(
+            risk_level_direct,
+            "结泥饼风险",
+        )
         mapped_score = self.map_probability_to_score(probability, "结泥饼风险")
-        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, "结泥饼风险")
         return {
             "risk_type": "结泥饼风险",
             "risk_level": risk_level,
             "risk_level_model": risk_level_direct,
             "risk_score": round(mapped_score, 2),
-            "probability": round(probability, 2),
+            "probability": probability,
             "measures": measures,
             "reason": reason,
             "potential_risk": potential_risk,
             "earliest_time": result.get('earliest_time', ''),
-            "stratum_label": result.get('stratum_label'),
-            "training_mode": result.get('training_mode', 'unified'),
+            "stratum_label": result.get('stratum_label', cluster_label),
+            "training_mode": result.get('training_mode', 'stratum_specific'),
         }
 
-    def _get_risk_level_and_measures(self, mapped_score, risk_type):
-        if mapped_score <= 0.5:
-            risk_level = "高风险Ⅳ"
-        elif mapped_score <= 2:
-            risk_level = "中风险Ⅲ"
-        elif mapped_score <= 3.5:
-            risk_level = "低风险Ⅱ"
-        else:
-            risk_level = "无风险Ⅰ"
+    def _normalize_model_risk_level(self, risk_level):
+        if isinstance(risk_level, str):
+            text = risk_level.strip()
+            if text in {"high", "高风险", "高风险Ⅳ", "Ⅳ", "IV"}:
+                return "高风险Ⅳ"
+            if text in {"medium", "中风险", "中风险Ⅲ", "Ⅲ", "III"}:
+                return "中风险Ⅲ"
+            if text in {"low", "低风险", "低风险Ⅱ", "Ⅱ", "II"}:
+                return "低风险Ⅱ"
+            if text in {"no_risk", "none", "normal", "无风险", "无风险Ⅰ", "Ⅰ", "I"}:
+                return "无风险Ⅰ"
+        raise ValueError(f"模型返回了无法识别的风险等级: {risk_level}")
+
+    def _get_model_level_and_measures(self, model_level, risk_type):
+        risk_level = self._normalize_model_risk_level(model_level)
         config = _risk_config_by_type(risk_type) or {}
         potential_risk = (
             config.get("potential_risk", "系统预警")
@@ -781,111 +719,45 @@ class RiskAssessor:
             pass
         return float(probability or 0.0)
 
-    def reverse_map_score_to_probability(self, risk_score, risk_type):
-        try:
-            config = _risk_config_by_type(risk_type)
-            if config:
-                return _interpolate_probability_from_score(risk_score, config["score_points"])
-        except Exception:
-            pass
-        return 0.0
-
-    def get_probability_thresholds(self, risk_type):
-        try:
-            config = _risk_config_by_type(risk_type)
-            if config:
-                return config.get("probability_thresholds", (0.5, 0.3))
-        except Exception:
-            pass
-        return 0.5, 0.3
-
-    def _missing_defined_fields(self, data, risk_type):
-        config = _risk_config_by_type(risk_type) or {}
-        missing = []
-        for field in config.get("fields", []) or []:
-            value = data.get(field) if isinstance(data, dict) else None
-            try:
-                is_missing = value in (None, "", "-") or pd.isna(value)
-            except Exception:
-                is_missing = value in (None, "", "-")
-            if is_missing:
-                missing.append(field)
-        return missing
-
-    def _fallback_no_risk_for_missing_fields(self, data, risk_type, missing_fields):
-        config = _risk_config_by_type(risk_type) or {}
-        _, normal_probability_threshold = config.get("probability_thresholds", (0.5, 0.3))
-        upper = max(float(normal_probability_threshold or 0.0) * 0.9, 0.0)
-        ring_val = None
-        time_val = None
-        if isinstance(data, dict):
-            ring_val = data.get("Ring.No", data.get("RING", data.get("ring")))
-            time_val = data.get("time", data.get("ts(Asia/Shanghai)", data.get("timestamp")))
-        seed_key = f"{risk_type}|{ring_val}|{time_val}"
-        probability = _stable_uniform_0_upper(seed_key, upper)
-        mapped_score = self.map_probability_to_score(probability, risk_type)
-        for _ in range(3):
-            if mapped_score > 3.5:
-                break
-            probability *= 0.5
-            mapped_score = self.map_probability_to_score(probability, risk_type)
-        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
-        return {
-            "risk_type": risk_type,
-            "risk_level": risk_level,
-            "risk_score": round(mapped_score, 2),
-            "probability": round(probability, 3),
-            "measures": measures,
-            "reason": reason,
-            "potential_risk": potential_risk,
-            "fault_cause": config.get("fault_cause", ""),
-        }
-
-    def _assess_generic(self, data, calc_func, risk_type, fault_cause):
-        missing_fields = self._missing_defined_fields(data, risk_type)
-        if missing_fields:
-            return self._fallback_no_risk_for_missing_fields(data, risk_type, missing_fields)
-
+    def _assess_generic_raw(self, data, calc_func, risk_type, fault_cause):
         result = calc_func(data)
-        probability = result.get('probability', 0)
+        probability = round(float(result.get('probability', 0) or 0), 2)
+        risk_level, measures, reason, potential_risk = self._get_model_level_and_measures(
+            result.get('risk_level'),
+            risk_type,
+        )
         mapped_score = self.map_probability_to_score(probability, risk_type)
-        risk_level, measures, reason, potential_risk = self._get_risk_level_and_measures(mapped_score, risk_type)
         return {
             "risk_type": risk_type,
             "risk_level": risk_level,
             "risk_score": round(mapped_score, 2),
-            "probability": round(probability, 3),
+            "probability": probability,
             "measures": measures,
             "reason": reason,
+            "details": result.get("details"),
             "potential_risk": potential_risk,
             "fault_cause": fault_cause,
         }
 
-    def assess_clog_risk(self, data):
-        config = RISK_CONFIG["clog_risk"]
-        return self._assess_generic(data, calculate_clog_risk, config["full_risk_type"], config["fault_cause"])
-
-    def assess_mdr_seal_risk(self, data):
-        config = RISK_CONFIG["mdr_seal_risk"]
-        return self._assess_generic(data, calculate_mdr_seal_risk, config["full_risk_type"], config["fault_cause"])
-
-    def assess_tail_seal_risk(self, data):
-        config = RISK_CONFIG["tail_seal_risk"]
-        return self._assess_generic(data, calculate_tail_seal_risk, config["full_risk_type"], config["fault_cause"])
-
-    def assess_all_risks(self, data_point):
+    def assess_single_point_risks(self, data_point):
+        specs = (
+            ("clog_risk", calculate_clog_risk),
+            ("mdr_seal_risk", calculate_mdr_seal_risk),
+            ("tail_seal_risk", calculate_tail_seal_risk),
+        )
         results = []
-        for assess_func in (
-                self.assess_clog_risk,
-                self.assess_mdr_seal_risk,
-                self.assess_tail_seal_risk,
-        ):
+        for risk_key, calc_func in specs:
+            config = RISK_CONFIG[risk_key]
             try:
-                results.append(assess_func(data_point))
+                results.append(self._assess_generic_raw(
+                    data_point,
+                    calc_func,
+                    config["full_risk_type"],
+                    config["fault_cause"],
+                ))
             except Exception:
                 continue
         return results
-
 
 def _clean_json_val(val, dash_if_empty=True):
     try:
@@ -1025,15 +897,55 @@ def _risk_priority(level: str) -> int:
 
 
 def _aggregate_with_consecutive(lst, risk_type: str, n: int):
+    if not lst:
+        return {}
+
     priorities = []
-    probs = []
     for r in lst:
         try:
             priorities.append(_risk_priority(r.get('risk_level')))
-            probs.append(r.get('probability', 0))
         except Exception:
             priorities.append(0)
-            probs.append(0)
+    valid_pairs = [(item, pri) for item, pri in zip(lst, priorities) if pri > 0]
+    if not valid_pairs:
+        return {}
+    lst = [item for item, _ in valid_pairs]
+    priorities = [pri for _, pri in valid_pairs]
+
+    def _probability(item):
+        try:
+            return float(item.get('probability', 0) or 0)
+        except Exception:
+            return 0.0
+
+    def _set_final_item(items, risk_level):
+        max_prob = round(max((_probability(item) for item in items), default=0.0), 2)
+        chosen = max(items, key=_probability) if items else lst[-1]
+        final_item = dict(chosen)
+        final_item['risk_level'] = risk_level
+        final_item['probability'] = max_prob
+        try:
+            measures, reason = risk_assessor._get_measures_and_reason(risk_level, risk_type)
+            final_item['measures'] = measures
+            final_item['reason'] = reason
+            config = _risk_config_by_type(risk_type) or {}
+            final_item['potential_risk'] = (
+                config.get("potential_risk", "系统预警")
+                if _risk_priority(risk_level) > 2
+                else "-"
+            )
+        except Exception:
+            pass
+        try:
+            final_item['risk_score'] = round(
+                risk_assessor.map_probability_to_score(max_prob, risk_type),
+                2,
+            )
+        except Exception:
+            pass
+        if _risk_priority(risk_level) <= 2:
+            final_item['potential_risk'] = "-"
+        return final_item
 
     def find_segment(min_priority):
         count = 0
@@ -1052,24 +964,12 @@ def _aggregate_with_consecutive(lst, risk_type: str, n: int):
 
     hi_start, _ = find_segment(4)
     if hi_start is not None:
-        # 扩展为完整的连续高风险片段（优先级>=4）
         j = hi_start
         while j < len(priorities) and priorities[j] >= 4:
             j += 1
-        hi_run_end = j - 1
-        seg_items = [lst[i] for i in range(hi_start, hi_run_end + 1)]
-        max_prob = max((item.get('probability', 0) for item in seg_items), default=0)
-        chosen = max(seg_items, key=lambda r: r.get('probability', 0)) if seg_items else lst[-1]
-        final_item = dict(chosen)
-        final_item['risk_level'] = "高风险Ⅳ"
-        final_item['probability'] = round(max_prob, 2)
-        try:
-            final_item['risk_score'] = round(risk_assessor.map_probability_to_score(max_prob, risk_type), 2)
-        except Exception:
-            pass
-        return final_item
+        return _set_final_item(lst[hi_start:j], "高风险Ⅳ")
 
-    mid_flags = [1 if pri == 3 else 0 for pri in priorities]
+    mid_flags = [1 if pri >= 3 else 0 for pri in priorities]
     count = 0
     mid_start = None
     for i, flag in enumerate(mid_flags):
@@ -1087,46 +987,15 @@ def _aggregate_with_consecutive(lst, risk_type: str, n: int):
         j = mid_start
         while j < len(mid_flags) and mid_flags[j] == 1:
             j += 1
-        mid_run_end = j - 1
-        seg_items = [lst[i] for i in range(mid_start, mid_run_end + 1)]
-        max_prob = max((item.get('probability', 0) for item in seg_items), default=0)
-        chosen = max(seg_items, key=lambda r: r.get('probability', 0)) if seg_items else lst[-1]
-        final_item = dict(chosen)
-        final_item['risk_level'] = "中风险Ⅲ"
-        final_item['probability'] = round(max_prob, 2)
-        try:
-            final_item['risk_score'] = round(risk_assessor.map_probability_to_score(max_prob, risk_type), 2)
-        except Exception:
-            pass
-        return final_item
+        return _set_final_item(lst[mid_start:j], "中风险Ⅲ")
 
-    # 低/无风险分支：不取平均，使用最大概率
-    probs_all = [r.get('probability', 0) for r in lst]
-    any_low = any(pri == 2 for pri in priorities)
-    chosen = lst[-1]
-    final_item = dict(chosen)
+    low_items = [item for item, pri in zip(lst, priorities) if pri == 2]
+    if low_items:
+        return _set_final_item(low_items, "低风险Ⅱ")
 
-    if any_low:
-        final_item['risk_level'] = "低风险Ⅱ"
-        low_probs = [lst[i].get('probability', 0) for i, pri in enumerate(priorities) if pri == 2]
-        max_low_prob = max(low_probs) if low_probs else (max(probs_all) if probs_all else 0)
-        final_item['probability'] = round(max_low_prob, 2)
-        try:
-            final_item['risk_score'] = round(risk_assessor.map_probability_to_score(max_low_prob, risk_type), 2)
-        except Exception:
-            pass
-        final_item['potential_risk'] = "-"
-    else:
-        final_item['risk_level'] = "无风险Ⅰ"
-        no_probs = [lst[i].get('probability', 0) for i, pri in enumerate(priorities) if pri == 1]
-        max_no_prob = max(no_probs) if no_probs else (max(probs_all) if probs_all else 0)
-        final_item['probability'] = round(max_no_prob, 2)
-        try:
-            final_item['risk_score'] = round(risk_assessor.map_probability_to_score(max_no_prob, risk_type), 2)
-        except Exception:
-            pass
-        final_item['potential_risk'] = "-"
-
+    no_risk_items = [item for item, pri in zip(lst, priorities) if pri == 1]
+    final_items = no_risk_items if no_risk_items else lst
+    final_item = _set_final_item(final_items, "无风险Ⅰ")
     return final_item
 
 
@@ -1136,12 +1005,9 @@ def aggregate_ring_risk_results(
         multi_ring_data=None,
         measurement=None,
         source_candidates=None,
-        data_enriched=False,
 ):
     if not isinstance(original_ring_data, list):
         original_ring_data = [original_ring_data] if original_ring_data else []
-    if not data_enriched:
-        original_ring_data = _enrich_points_with_geo(original_ring_data, source_candidates=source_candidates)
 
     risk_by_type = {}
     risk_type_meta = {
@@ -1149,21 +1015,19 @@ def aggregate_ring_risk_results(
         "主驱动密封失效风险": ("mdr_seal_risk", _risk_display_fields("mdr_seal_risk")),
         "盾尾密封失效风险": ("tail_seal_risk", _risk_display_fields("tail_seal_risk")),
     }
+
     for point in original_ring_data:
-        if isinstance(point, dict):
-            try:
-                point_results = risk_assessor.assess_all_risks(point)
-                for r in point_results:
-                    rt = r.get('risk_type')
-                    if rt and rt != "结泥饼风险":
-                        cfg_key, fields = risk_type_meta.get(rt, (None, None))
-                        rr = dict(r)
-                        rr["_time"] = point.get("time")
-                        rr["_params"] = {k: point.get(k) for k in fields} if fields else None
-                        risk_by_type.setdefault(rt, []).append(rr)
-            except Exception as e:
-                pass
-                continue
+        if not isinstance(point, dict):
+            continue
+        point_results = risk_assessor.assess_single_point_risks(point)
+        for r in point_results:
+            rt = r.get('risk_type')
+            if rt and rt != "结泥饼风险":
+                cfg_key, fields = risk_type_meta.get(rt, (None, None))
+                rr = dict(r)
+                rr["_time"] = point.get("time")
+                rr["_params"] = {k: point.get(k) for k in fields} if fields else None
+                risk_by_type.setdefault(rt, []).append(rr)
 
     final_results = []
     for rt, lst in risk_by_type.items():
@@ -1182,24 +1046,24 @@ def aggregate_ring_risk_results(
             )
         else:
             multi_ring_data = original_ring_data
-    try:
-        mud_cake_points = multi_ring_data
-        if isinstance(mud_cake_points, list) and current_ring_number is not None:
-            current_geo = _lookup_project_geo(current_ring_number, source_candidates)
-            mud_cake_points = _with_current_ring_cluster(mud_cake_points, current_geo)
-        seq_risk = risk_assessor.assess_mud_cake_risk_sequence(mud_cake_points)
-        if isinstance(seq_risk, dict) and seq_risk.get("risk_type") == "结泥饼风险":
-            final_results.append(seq_risk)
-    except Exception:
-        pass
+    if not original_ring_data:
+        return final_results, risk_by_type
+
+    mud_cake_points = multi_ring_data
+    if isinstance(mud_cake_points, list):
+        mud_cake_points = _enrich_points_with_geo(mud_cake_points, source_candidates=source_candidates)
+    seq_risk = risk_assessor.assess_mud_cake_risk_sequence(mud_cake_points)
+    if isinstance(seq_risk, dict) and seq_risk.get("risk_type") == "结泥饼风险":
+        final_results.append(seq_risk)
 
     return final_results, risk_by_type
+
 
 
 def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
     try:
         m = _quote_influx_identifier(measurement or INFLUXDB_MEASUREMENT)
-        ring_formatted = f"{int(float(ring_number))}.00"
+        ring_int_val = int(float(ring_number))
         select_clause = _build_select_clause(fields)
         limit_clause = ""
         try:
@@ -1209,33 +1073,16 @@ def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
                     limit_clause = f" LIMIT {limit_int}"
         except Exception:
             limit_clause = ""
-        query_exact = f"""
-        SELECT {select_clause} FROM {m} 
-        WHERE "Ring.No"='{ring_formatted}' 
-        ORDER BY time ASC{limit_clause}
-        """
-        query_numeric = f"""
-        SELECT {select_clause} FROM {m} 
-        WHERE "Ring.No"={float(ring_number)} 
-        ORDER BY time ASC{limit_clause}
-        """
-        ring_int_val = int(float(ring_number))
+
         query_range = f"""
         SELECT {select_clause} FROM {m} 
         WHERE "Ring.No" >= {ring_int_val} AND "Ring.No" < {ring_int_val + 1} 
         ORDER BY time ASC{limit_clause}
         """
-        # 按顺序短路查询：一旦某种查询有结果，直接返回（保持输出一致）
-        queries = [query_exact, query_numeric, query_range]
-        for q in queries:
-            try:
-                res = client.query(q)
-                points = list(res.get_points())
-                if points:
-                    return _dedupe_points_by_time(points)
-            except Exception:
-                pass
-
+        res = client.query(query_range)
+        points = list(res.get_points()) if res is not None else []
+        if points:
+            return _dedupe_points_by_time(points)
         return None
 
     except Exception as e:
@@ -1278,10 +1125,23 @@ def _group_points_by_ring(points):
     return ring_map
 
 
+def _evenly_sample_points(items, sample_size):
+    total = len(items or [])
+    if total <= sample_size:
+        return list(items or [])
+    if sample_size <= 1:
+        return [items[-1]]
+    last_index = total - 1
+    return [
+        items[int(i * last_index / (sample_size - 1))]
+        for i in range(sample_size)
+    ]
 
 
-def collect_key_parameters(center_ring, fields, count=6, preload=None, measurement=None):
+def collect_key_parameters(center_ring, fields, count=6, preload=None):
     fields_list = list(fields or [])
+    if not isinstance(preload, dict):
+        return []
 
     try:
         center = int(float(center_ring))
@@ -1289,27 +1149,37 @@ def collect_key_parameters(center_ring, fields, count=6, preload=None, measureme
         return []
 
     try:
-        start_ring = center - (int(count) - 1)
+        target_count = int(count)
     except Exception:
-        start_ring = center - 5
+        target_count = 6
+
+    ring_keys = []
+    for r, pts in preload.items():
+        if not pts:
+            continue
+        try:
+            ring_int = int(float(r))
+        except Exception:
+            continue
+        if ring_int <= center:
+            ring_keys.append(ring_int)
+    ring_keys = sorted(set(ring_keys))[-target_count:]
 
     merged_points = []
-    for r in range(start_ring, center + 1):
-        if isinstance(preload, dict):
-            pts = preload.get(r) or []
-        else:
-            pts = query_ring_data(r, measurement=measurement) or []
+    per_ring_sample = 300
+    for r in ring_keys:
+        pts = preload.get(r) or []
+        ring_points = []
         for p in pts:
-            try:
-                local_dt = _to_local_dt(p.get("time"))
-            except Exception:
-                local_dt = None
-            item = {"time": format_time_utc_to_shanghai(p.get("time"))}
+            raw_time = p.get("time") or ""
+            item = {"time": format_time_utc_to_shanghai(raw_time)}
             for f in fields_list:
                 item[f] = _round_value_2(p.get(f))
-            merged_points.append((local_dt, item))
+            ring_points.append((raw_time, item))
+        ring_points.sort(key=lambda x: x[0])
+        merged_points.extend(_evenly_sample_points(ring_points, per_ring_sample))
 
-    merged_points.sort(key=lambda x: x[0] or datetime.min)
+    merged_points.sort(key=lambda x: x[0])
 
     result = []
     for _, item in merged_points:
@@ -1352,57 +1222,48 @@ def get_risk_level():
         source_candidates = _source_candidates(
             shield_id=shield_id,
             project_code=project_code_request,
-            request_data=data,
         )
 
         center_int = ring_int_cache
         ring_window_count = MUD_CAKE_SEQUENCE_RING_COUNT
-        start_ring = center_int - (ring_window_count - 1)
 
         required_fields = _risk_query_fields()
 
-        multi_ring_data = query_ring_range_data(start_ring, center_int + 1, measurement=measurement,
-                                                fields=required_fields)
-        if not multi_ring_data:
-            multi_ring_data = query_consecutive_ring_data(ring_number, count=ring_window_count, measurement=measurement,
-                                                          fields=required_fields) or []
+        multi_ring_data = query_consecutive_ring_data(
+            ring_number,
+            count=ring_window_count,
+            measurement=measurement,
+            fields=required_fields,
+        ) or []
 
         ring_points_map = _group_points_by_ring(multi_ring_data)
         original_ring_data = ring_points_map.get(center_int) or []
         if not original_ring_data:
             ring_data = query_ring_data(ring_number, measurement=measurement, fields=required_fields)
             original_ring_data = ring_data if isinstance(ring_data, list) else ([ring_data] if ring_data else [])
-
-        if not original_ring_data:
-            empty_result = {
-                "ring": int(ring_number),
-                "project_code": project_code_request,
-                "mud_cake_risk": {},
-                "clog_risk": {},
-                "mdr_seal_risk": {},
-                "tail_seal_risk": {},
-            }
-            if cache_ttl > 0:
-                _ttl_cache_set("risk_level_result", cache_key, empty_result, ttl_sec=cache_ttl, max_items=2048)
-            return jsonify(empty_result)
+            if original_ring_data:
+                ring_points_map[center_int] = original_ring_data
+                if isinstance(multi_ring_data, list):
+                    multi_ring_data.extend(original_ring_data)
 
         preload_map = {}
-        for r in range(start_ring, center_int + 1):
+        selected_rings = sorted(r for r, pts in ring_points_map.items() if pts and r <= center_int)[-ring_window_count:]
+        for r in selected_rings:
             preload_map[r] = ring_points_map.get(r) or []
         preload_map[center_int] = original_ring_data
-        all_display_fields = []
-        seen_display_fields = set()
+
+        all_key_fields = []
+        seen_key_fields = set()
         for key in ("mud_cake_risk", "clog_risk", "mdr_seal_risk", "tail_seal_risk"):
-            for field in _risk_display_fields(key):
-                if field not in seen_display_fields:
-                    seen_display_fields.add(field)
-                    all_display_fields.append(field)
+            for field in _risk_key_parameter_fields(key):
+                if field not in seen_key_fields:
+                    seen_key_fields.add(field)
+                    all_key_fields.append(field)
         all_key_parameters = collect_key_parameters(
             ring_number,
-            all_display_fields,
+            all_key_fields,
             count=ring_window_count,
             preload=preload_map,
-            measurement=measurement,
         )
 
         risk_results, point_results_by_type = aggregate_ring_risk_results(
@@ -1411,7 +1272,6 @@ def get_risk_level():
             multi_ring_data=multi_ring_data,
             measurement=measurement,
             source_candidates=source_candidates,
-            data_enriched=True,
         )
         result = {
             "ring": int(ring_number),
@@ -1428,7 +1288,22 @@ def get_risk_level():
             fm = risk_obj.get("measures")
             fm = _clean_json_val(fm)
             display_fields = _risk_display_fields(risk_config_key)
+            key_parameter_fields = _risk_key_parameter_fields(risk_config_key)
             imp = _risk_display_impact(risk_config_key)
+
+            try:
+                probability = float(risk_obj.get("probability") or 0.0)
+            except Exception:
+                probability = 0.0
+            if probability < 0.0:
+                probability = 0.0
+            elif probability > 1.0:
+                probability = 1.0
+            probability = round(probability, 2)
+            try:
+                risk_score = round(float(risk_obj.get("risk_score")), 2)
+            except Exception:
+                risk_score = round(risk_assessor.map_probability_to_score(probability, spec["full_risk_type"]), 2)
 
             risk_out = {
                 "risk_type": spec["risk_type_label"],
@@ -1441,17 +1316,12 @@ def get_risk_level():
                 "impact_parameters": imp,
                 "safety_level": risk_obj["risk_level"],
                 "risk_level": map_safety_to_level(risk_obj["risk_level"]),
-                "risk_score": round(risk_obj["risk_score"], 2),
-                "probability": round(risk_obj["probability"], 2),
+                "risk_score": risk_score,
+                "probability": probability,
                 "potential_risk": risk_obj["potential_risk"],
                 "warning_time": "-",
                 "warning_parameters": "-",
             }
-            if risk_obj.get("fallback"):
-                risk_out["fallback"] = True
-                risk_out["fallback_reason"] = risk_obj.get("fallback_reason")
-                risk_out["missing_fields"] = risk_obj.get("missing_fields", [])
-
             earliest_time_raw = "-"
             earliest_params = None
             if risk_config_key == "mud_cake_risk":
@@ -1470,7 +1340,7 @@ def get_risk_level():
                 should_warn = final_level_text in WARNING_LEVELS
                 if risk_config_key != "mud_cake_risk" or should_warn:
                     risk_out["warning_time"] = format_time_utc_to_shanghai(earliest_time_raw)
-            elif original_ring_data:
+            elif risk_config_key == "mud_cake_risk" and original_ring_data:
                 t0 = original_ring_data[0].get("time")
                 if t0:
                     risk_out["warning_time"] = format_time_utc_to_shanghai(t0)
@@ -1488,37 +1358,13 @@ def get_risk_level():
                 risk_out["warning_parameters"] = "-"
 
             selected_key_parameters = [
-                {"time": item.get("time"), **{field: item.get(field) for field in display_fields}}
+                {"time": item.get("time"), **{field: item.get(field) for field in key_parameter_fields}}
                 for item in all_key_parameters
             ]
             risk_out["key_parameters"] = _rename_keys(selected_key_parameters, config["map"])
             risk_out["key_parameters"] = _with_value_and_unit(risk_out["key_parameters"], config["units"])
 
             return risk_out
-
-        def _build_missing_fields_no_risk_item(risk_config_key):
-            spec = RISK_OUTPUT_SPECS[risk_config_key]
-            config = RISK_CONFIG[risk_config_key]
-            measures, reason = _measures_and_reason("无风险Ⅰ", spec["full_risk_type"])
-            _, normal_probability_threshold = config.get("probability_thresholds", (0.5, 0.3))
-            upper = max(float(normal_probability_threshold or 0.0) * 0.9, 0.0)
-            seed_key = f"{project_code_request}|{ring_number}|{spec['full_risk_type']}"
-            probability = _stable_uniform_0_upper(seed_key, upper)
-            risk_score = risk_assessor.map_probability_to_score(probability, spec["full_risk_type"])
-            for _ in range(3):
-                if risk_score > 3.5:
-                    break
-                probability *= 0.5
-                risk_score = risk_assessor.map_probability_to_score(probability, spec["full_risk_type"])
-            no_risk_obj = {
-                "risk_level": "无风险Ⅰ",
-                "risk_score": round(float(risk_score), 2),
-                "probability": float(probability),
-                "measures": measures,
-                "reason": reason,
-                "potential_risk": "-",
-            }
-            return _build_risk_item(no_risk_obj, risk_config_key)
 
         for risk in risk_results:
             risk_type = risk['risk_type']
@@ -1534,10 +1380,6 @@ def get_risk_level():
 
             elif risk_type == "盾尾密封失效风险":
                 result["tail_seal_risk"] = _build_risk_item(risk, "tail_seal_risk")
-
-        for risk_config_key in ("mud_cake_risk", "clog_risk", "mdr_seal_risk", "tail_seal_risk"):
-            if not result.get(risk_config_key):
-                result[risk_config_key] = _build_missing_fields_no_risk_item(risk_config_key)
 
         if cache_ttl > 0:
             _ttl_cache_set("risk_level_result", cache_key, result, ttl_sec=cache_ttl, max_items=2048)
@@ -1940,22 +1782,35 @@ def query_consecutive_ring_data(center_ring, count=6, measurement=None, fields=N
         if target_count <= 1:
             return query_ring_data(ring_int, measurement=measurement, fields=fields) or []
 
-        start_ring = max(0, ring_int - (target_count - 1))
-        points = query_ring_range_data(start_ring, ring_int + 1, measurement=measurement, fields=fields) or []
-        if points:
-            ring_map = _group_points_by_ring(points)
-            if len(ring_map) >= min(target_count, ring_int + 1):
-                return points
-
+        attempt = 0
         combined = []
-        rings_collected = set()
-        r = ring_int
-        while r > 0 and len(rings_collected) < target_count:
-            pts = query_ring_data(r, measurement=measurement, fields=fields)
-            if pts:
-                combined.extend(pts)
-                rings_collected.add(r)
-            r -= 1
+        while True:
+            window = target_count * (2 ** attempt)
+            start_ring = max(0, ring_int - (window - 1))
+            points = query_ring_range_data(
+                start_ring,
+                ring_int + 1,
+                measurement=measurement,
+                fields=fields,
+            )
+            ring_map = _group_points_by_ring(points)
+            selected_rings = sorted([r for r, pts in ring_map.items() if pts and r <= ring_int])[-target_count:]
+            if selected_rings:
+                combined = []
+                selected_set = set(selected_rings)
+                for p in points:
+                    try:
+                        pr = int(float(p.get("Ring.No", p.get("RING"))))
+                    except Exception:
+                        continue
+                    if pr in selected_set:
+                        combined.append(p)
+            if len(selected_rings) >= target_count or start_ring <= 0:
+                break
+            attempt += 1
+            if attempt > 30:
+                break
+
         if not combined:
             return []
         seen = set()
@@ -2373,4 +2228,3 @@ def query_history_data():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "error": str(e)}), 500
-
