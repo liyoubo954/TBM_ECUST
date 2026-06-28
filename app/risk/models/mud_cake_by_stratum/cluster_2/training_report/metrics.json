@@ -7,16 +7,39 @@
   "window_points": 48,
   "window_stride": 8,
   "sequence_stride": 1,
-  "train_sequences": 1190,
-  "val_sequences": 389,
-  "test_sequences": 435,
-  "test_no_risk_rate": 0.9770114942528736,
-  "test_low_rate": 0.020689655172413793,
-  "test_medium_rate": 0.0022988505747126436,
-  "test_high_rate": 0.0,
-  "test_medium_high_rate": 0.0022988505747126436,
-  "test_high_rate_only": 0.0,
-  "threshold_low": 0.7766755039365463,
-  "threshold_medium": 0.8633005343291096,
-  "threshold_high": 0.9031114076036384
+  "train_sequences": 1038,
+  "val_sequences": 396,
+  "test_sequences": 467,
+  "test_no_risk_rate": 0.8843683083511777,
+  "test_low_rate": 0.1006423982869379,
+  "test_medium_rate": 0.01284796573875803,
+  "test_high_rate": 0.0021413276231263384,
+  "test_medium_high_rate": 0.014989293361884369,
+  "test_high_rate_only": 0.0021413276231263384,
+  "threshold_low": 0.40458687419248107,
+  "threshold_medium": 0.599409474763555,
+  "threshold_high": 0.9252009061807512,
+  "threshold_method": "kde",
+  "kde_threshold_metadata": {
+    "method": "kde",
+    "kernel": "gaussian",
+    "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+    "bandwidth_method": "silverman_robust",
+    "bandwidth": 0.028691285003744238,
+    "cdf_levels": {
+      "low": 0.95,
+      "medium": 0.995,
+      "high": 0.999
+    },
+    "support": [
+      0.0,
+      1.0
+    ],
+    "score_min": 0.0,
+    "score_max": 0.9431374251120066,
+    "score_mean": 0.13303863853732018,
+    "score_std": 0.14427452578868283,
+    "score_sha256": "15e28c3e4a4237f081e0375d11c7b33cb2c6343b3805cc28fc9e6a767377a344",
+    "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+  }
 }

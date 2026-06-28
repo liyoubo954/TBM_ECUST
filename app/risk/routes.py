@@ -42,13 +42,11 @@ def _env_int(name, default):
 class Config(object):
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'sf9glGVa20pyM1NtdukZ'
 
-    PROJECT_CODE = os.environ.get("PROJECT_CODE", "TSJY_DZ1360")
     INFLUXDB_HOST = os.environ.get('INFLUXDB_HOST') or '192.168.211.108'
     INFLUXDB_PORT = _env_int('INFLUXDB_PORT', 38086)
     INFLUXDB_USERNAME = os.environ.get('INFLUXDB_USERNAME') or 'admin'
     INFLUXDB_PASSWORD = os.environ.get('INFLUXDB_PASSWORD') or 'FZaStb0cXFuFbehPBM6YHCiuAAX6QIXr'
     INFLUXDB_DATABASE = os.environ.get('INFLUXDB_DATABASE') or 'algorithm'
-    INFLUXDB_MEASUREMENT = os.environ.get('INFLUXDB_MEASUREMENT') or 'tsjy_dz1360_riskwarning'
     INFLUXDB_TIMEOUT = _env_int('INFLUXDB_TIMEOUT', 10)
 
     MYSQL_HOST = os.environ.get("MYSQL_HOST", "172.16.105.12")
@@ -73,13 +71,11 @@ class Config(object):
 
 CONSECUTIVE_TRIGGER_N = int(os.environ.get('CONSECUTIVE_TRIGGER_N', '3'))
 MUD_CAKE_SEQUENCE_RING_COUNT = 6
-PROJECT_CODE = Config.PROJECT_CODE
 INFLUXDB_HOST = Config.INFLUXDB_HOST
 INFLUXDB_PORT = Config.INFLUXDB_PORT
 INFLUXDB_USERNAME = Config.INFLUXDB_USERNAME
 INFLUXDB_PASSWORD = Config.INFLUXDB_PASSWORD
 INFLUXDB_DATABASE = Config.INFLUXDB_DATABASE
-INFLUXDB_MEASUREMENT = Config.INFLUXDB_MEASUREMENT
 INFLUXDB_TIMEOUT = Config.INFLUXDB_TIMEOUT
 client = InfluxDBClient(
     host=INFLUXDB_HOST,
@@ -91,6 +87,8 @@ client = InfluxDBClient(
 )
 
 SHIELD_CONFIG = {
+    "gag_dl1116": {"measurement": "gag_dl1116_riskwarning", "project_code": "GAG_DL1116"},
+    "htcjsd_dz1368": {"measurement": "htcjsd_dz1368_riskwarning", "project_code": "HTCJSD_DZ1368"},
     "tsjy_dz1360": {"measurement": "tsjy_dz1360_riskwarning", "project_code": "TSJY_DZ1360"},
     "yztl_dz1266": {"measurement": "yztl_dz1266_riskwarning", "project_code": "YZTL_DZ1266"},
     "sjtl_dl898": {"measurement": "sjtl_dl898_riskwarning", "project_code": "SJTL_DL898"},
@@ -115,18 +113,22 @@ def _quote_mysql_identifier(identifier):
     return f"`{text}`"
 
 
+class InvalidShieldIdError(ValueError):
+    pass
+
+
 def _resolve_shield_context(shield_id: str):
-    try:
-        sid = str(shield_id or "").strip()
-        if sid and not _IDENTIFIER_RE.fullmatch(sid):
-            sid = ""
-        if sid and sid in SHIELD_CONFIG:
-            return SHIELD_CONFIG[sid]["measurement"], SHIELD_CONFIG[sid]["project_code"]
-        if sid:
-            return f"{sid}_riskwarning", sid.upper()
-        return INFLUXDB_MEASUREMENT, PROJECT_CODE
-    except Exception:
-        return INFLUXDB_MEASUREMENT, PROJECT_CODE
+    sid = str(shield_id or "").strip().lower()
+    if not sid:
+        raise InvalidShieldIdError("缺少 shield_id 参数")
+    if not _IDENTIFIER_RE.fullmatch(sid):
+        raise InvalidShieldIdError("shield_id 格式非法")
+    config = SHIELD_CONFIG.get(sid)
+    if config is None:
+        raise InvalidShieldIdError(
+            f"不支持的 shield_id: {sid}；支持值: {', '.join(sorted(SHIELD_CONFIG))}"
+        )
+    return config["measurement"], config["project_code"]
 
 
 POINT_MAP_CACHE = {}
@@ -138,6 +140,10 @@ GEO_CLUSTER_CSV = os.environ.get(
 )
 
 SOURCE_FILE_ALIASES = {
+    "gag_dl1116": "广澳港处理后的数据",
+    "GAG_DL1116": "广澳港处理后的数据",
+    "htcjsd_dz1368": "海太处理后数据.xlsx",
+    "HTCJSD_DZ1368": "海太处理后数据.xlsx",
     "tsjy_dz1360": "通苏嘉甬处理后的数据",
     "TSJY_DZ1360": "通苏嘉甬处理后的数据",
     "通苏嘉甬": "通苏嘉甬处理后的数据",
@@ -1062,7 +1068,7 @@ def aggregate_ring_risk_results(
 
 def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
     try:
-        m = _quote_influx_identifier(measurement or INFLUXDB_MEASUREMENT)
+        m = _quote_influx_identifier(measurement)
         ring_int_val = int(float(ring_number))
         select_clause = _build_select_clause(fields)
         limit_clause = ""
@@ -1092,7 +1098,7 @@ def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
 
 def query_ring_range_data(start_ring_inclusive, end_ring_exclusive, measurement=None, fields=None):
     try:
-        m = _quote_influx_identifier(measurement or INFLUXDB_MEASUREMENT)
+        m = _quote_influx_identifier(measurement)
         start_int = int(float(start_ring_inclusive))
         end_int = int(float(end_ring_exclusive))
         select_clause = _build_select_clause(fields)
@@ -1211,7 +1217,10 @@ def get_risk_level():
             return parse_err_resp, parse_err_code
 
         shield_id = data.get('shield_id')
-        measurement, project_code_request = _resolve_shield_context(shield_id)
+        try:
+            measurement, project_code_request = _resolve_shield_context(shield_id)
+        except InvalidShieldIdError as exc:
+            return jsonify({"status": "error", "error": str(exc)}), 400
         ring_int_cache = int(float(ring_number))
         cache_ttl = float(os.environ.get("GETRISKLEVEL_CACHE_TTL_SEC", "10") or 10)
         cache_key = (str(shield_id).strip() if shield_id else "", ring_int_cache)
@@ -1688,7 +1697,10 @@ def get_latest_risk_level():
         if not table:
             return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
 
-        _, project_code_request = _resolve_shield_context(shield_id)
+        try:
+            _, project_code_request = _resolve_shield_context(shield_id)
+        except InvalidShieldIdError as exc:
+            return jsonify({"status": "error", "error": str(exc)}), 400
 
         with _mysql_connect() as conn:
             row = _fetch_latest_row(conn, table, project_code=project_code_request)
@@ -1896,7 +1908,10 @@ def get_all_risk_records():
         if not table:
             return jsonify({"status": "error", "error": "不支持的风险类型", "supported": list(RISK_TABLES.keys())}), 400
 
-        _, project_code_request = _resolve_shield_context(shield_id)
+        try:
+            _, project_code_request = _resolve_shield_context(shield_id)
+        except InvalidShieldIdError as exc:
+            return jsonify({"status": "error", "error": str(exc)}), 400
         limit_env = _env_int("RISK_RECORDS_LIMIT", 1000)
         max_limit_env = _env_int("RISK_RECORDS_LIMIT_MAX", 5000)
         limit_arg = _normalize_limit(data.get("limit", limit_env), limit_env, max_limit_env)

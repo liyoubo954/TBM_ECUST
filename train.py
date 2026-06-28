@@ -1,5 +1,6 @@
 import json
 import argparse
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -8,6 +9,8 @@ import matplotlib
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from scipy.optimize import brentq
+from scipy.special import ndtr
 from sklearn.ensemble import IsolationForest
 
 matplotlib.use("Agg")
@@ -27,12 +30,12 @@ from app.risk.utils.mud_cake_risk import (
     smooth_values,
     trend_vector,
 )
-
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_DIR = PROJECT_ROOT / "app" / "risk" / "models"
 STRATUM_MODEL_ROOT = MODEL_DIR / "mud_cake_by_stratum"
 ALIGNED_DATA_ROOT = PROJECT_ROOT / "app" / "risk" / "aligned_by_stratum"
 EXPECTED_STRATA = [str(i) for i in range(6)]
+KDE_CALIBRATION_SCORES_FILENAME = "mud_cake_kde_calibration_scores.npy"
 
 
 def _read_table(path: Path) -> pd.DataFrame:
@@ -253,6 +256,7 @@ class MudCakeTrainer:
         self.split_info: Dict[str, Any] = {}
         self.training_history: Dict[str, List[float]] = {}
         self.feature_coverage: Dict[str, Dict[str, float]] = {}
+        self.kde_calibration_scores: Optional[np.ndarray] = None
         self.config = {
             "sequence_length": 6,
             "feature_weights": {
@@ -314,26 +318,18 @@ class MudCakeTrainer:
             },
             "risk_calibration": {
                 "enabled": True,
-                "low_quantile": 0.99,
-                "medium_quantile": 0.999,
-                "high_quantile": 0.9997,
+                "method": "kde",
+                "kde_kernel": "gaussian",
+                "kde_low_cdf": 0.95,
+                "kde_medium_cdf": 0.995,
+                "kde_high_cdf": 0.999,
                 "scale_low_quantile": 0.50,
                 "scale_high_quantile": 0.999,
                 "include_test_normal": True,
             },
-            "risk_postprocessing": {
-                "normal_only_training": True,
-                "min_consecutive_windows_for_low": 2,
-                "min_consecutive_windows_for_medium": 4,
-                "min_consecutive_windows_for_high": 6,
-                "min_consecutive_rings_for_medium": 2,
-                "min_consecutive_rings_for_high": 3,
-                "downgrade_isolated_level": "no_risk",
-            },
             "reporting": {
                 "score_batch_size": 1024,
                 "scatter_sample_size": 12000,
-                "max_calibration_sequences": 40000,
             },
         }
 
@@ -749,7 +745,11 @@ class MudCakeTrainer:
         )
         self.isolation_forest.fit(x_train)
 
-    def _raw_sequence_scores(self, sequences: List[tuple]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _raw_sequence_scores(
+        self,
+        sequences: List[tuple],
+        calculate_combined: bool = True,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         if not sequences:
             return np.array([]), np.array([]), np.array([])
         batch_size = int(self.config.get("reporting", {}).get("score_batch_size", 512) or 512)
@@ -766,7 +766,11 @@ class MudCakeTrainer:
             if_parts.append(-self.isolation_forest.decision_function(trend_vectors))
         ae_error = np.concatenate(ae_parts) if ae_parts else np.array([])
         if_anomaly = np.concatenate(if_parts) if if_parts else np.array([])
-        combined = self._calibrated_combined_score(ae_error, if_anomaly)
+        combined = (
+            self._calibrated_combined_score(ae_error, if_anomaly)
+            if calculate_combined
+            else np.array([])
+        )
         return ae_error, if_anomaly, combined
 
     @staticmethod
@@ -778,25 +782,98 @@ class MudCakeTrainer:
 
     def _calibrated_combined_score(self, ae_error: np.ndarray, if_anomaly: np.ndarray) -> np.ndarray:
         calibration = self.config.get("risk_calibration", {})
+        if calibration.get("enabled") is not True or calibration.get("method") != "kde":
+            raise ValueError("Risk calibration must be enabled and use KDE")
         ae_bounds = calibration.get("ae_error_bounds", {})
         if_bounds = calibration.get("if_anomaly_bounds", {})
-        ae_scaled = self._scale_metric(
-            ae_error,
-            float(ae_bounds.get("low", np.quantile(ae_error, 0.5) if ae_error.size else 0.0)),
-            float(ae_bounds.get("high", np.quantile(ae_error, 0.995) if ae_error.size else 1.0)),
-        )
-        if_scaled = self._scale_metric(
-            if_anomaly,
-            float(if_bounds.get("low", np.quantile(if_anomaly, 0.5) if if_anomaly.size else 0.0)),
-            float(if_bounds.get("high", np.quantile(if_anomaly, 0.995) if if_anomaly.size else 1.0)),
-        )
-        rf = self.config.get("risk_fusion", {})
-        ae_weight = float(rf.get("ae_weight", 0.5))
-        if_weight = float(rf.get("if_weight", 0.5))
+        norm_ae = self._scale_metric(ae_error, float(ae_bounds["low"]), float(ae_bounds["high"]))
+        norm_if = self._scale_metric(if_anomaly, float(if_bounds["low"]), float(if_bounds["high"]))
+        fusion = self.config.get("risk_fusion", {})
+        ae_weight = float(fusion.get("ae_weight", 0.5))
+        if_weight = float(fusion.get("if_weight", 0.5))
         total = ae_weight + if_weight
         if total <= 0:
             ae_weight, if_weight, total = 0.5, 0.5, 1.0
-        return (ae_weight / total) * ae_scaled + (if_weight / total) * if_scaled
+        return (ae_weight / total) * norm_ae + (if_weight / total) * norm_if
+
+    @staticmethod
+    def _silverman_bandwidth(values: np.ndarray) -> float:
+        values = np.asarray(values, dtype=float)
+        values = values[np.isfinite(values)]
+        if values.size < 2:
+            raise ValueError("KDE threshold calibration requires at least two finite scores")
+        std = float(np.std(values, ddof=1))
+        iqr = float(np.subtract(*np.percentile(values, [75, 25])))
+        robust_sigma = min(std, iqr / 1.349) if iqr > 0 else std
+        if robust_sigma <= 1e-12:
+            raise ValueError("KDE scores have no usable dispersion; bandwidth cannot be data-derived")
+        bandwidth = 0.9 * robust_sigma * (values.size ** (-1 / 5))
+        if not np.isfinite(bandwidth) or bandwidth <= 0:
+            raise ValueError("Silverman KDE bandwidth is invalid")
+        return float(bandwidth)
+
+    @staticmethod
+    def _kde_cdf_thresholds(scores: np.ndarray, calibration: Dict[str, Any]) -> Tuple[Dict[str, float], Dict[str, Any]]:
+        scores = np.asarray(scores, dtype=float)
+        scores = scores[np.isfinite(scores)]
+        if scores.size < 20:
+            raise ValueError("KDE threshold calibration requires at least 20 finite scores")
+        cdf_points = {
+            "low": float(calibration.get("kde_low_cdf", 0.95)),
+            "medium": float(calibration.get("kde_medium_cdf", 0.995)),
+            "high": float(calibration.get("kde_high_cdf", 0.999)),
+        }
+        if not (0.0 < cdf_points["low"] < cdf_points["medium"] < cdf_points["high"] < 1.0):
+            raise ValueError("KDE CDF levels must satisfy 0 < low < medium < high < 1")
+
+        kernel = str(calibration.get("kde_kernel", "gaussian") or "gaussian")
+        if kernel != "gaussian":
+            raise ValueError("Strict KDE calibration currently supports only the gaussian kernel")
+        bandwidth = MudCakeTrainer._silverman_bandwidth(scores)
+
+        def raw_cdf(x: float) -> float:
+            return float(np.mean(ndtr((x - scores) / bandwidth)))
+
+        support_low, support_high = 0.0, 1.0
+        cdf_low, cdf_high = raw_cdf(support_low), raw_cdf(support_high)
+        normalization = cdf_high - cdf_low
+        if not np.isfinite(normalization) or normalization <= 1e-12:
+            raise ValueError("Bounded KDE CDF normalization failed")
+
+        def bounded_cdf(x: float) -> float:
+            return (raw_cdf(x) - cdf_low) / normalization
+
+        thresholds = {
+            name: float(
+                brentq(
+                    lambda x, target=prob: bounded_cdf(x) - target,
+                    support_low,
+                    support_high,
+                    xtol=1e-12,
+                    rtol=1e-12,
+                )
+            )
+            for name, prob in cdf_points.items()
+        }
+        if not (thresholds["low"] < thresholds["medium"] < thresholds["high"]):
+            raise ValueError("KDE inverse CDF did not produce strictly ordered thresholds")
+        score_bytes = np.ascontiguousarray(scores.astype("<f8")).tobytes()
+        metadata = {
+            "method": "kde",
+            "kernel": kernel,
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": float(bandwidth),
+            "cdf_levels": cdf_points,
+            "support": [support_low, support_high],
+            "score_min": float(np.min(scores)),
+            "score_max": float(np.max(scores)),
+            "score_mean": float(np.mean(scores)),
+            "score_std": float(np.std(scores)),
+            "score_sha256": hashlib.sha256(score_bytes).hexdigest(),
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override",
+        }
+        return thresholds, metadata
 
     def calibrate_risk_thresholds(
         self,
@@ -805,52 +882,73 @@ class MudCakeTrainer:
         test_sequences: Optional[List[tuple]] = None,
     ) -> None:
         calibration = dict(self.config.get("risk_calibration", {}))
-        if not calibration.get("enabled", True):
-            return
+        if calibration.get("enabled") is not True or calibration.get("method") != "kde":
+            raise ValueError("Risk thresholds must be calibrated with enabled KDE")
         calibration_sequences = list(train_sequences)
         if val_sequences:
             calibration_sequences.extend(val_sequences)
-        if calibration.get("include_test_normal", True) and test_sequences:
+        include_test = calibration.get("include_test_normal") is True
+        if include_test and test_sequences:
             calibration_sequences.extend(test_sequences)
-        max_calibration = int(self.config.get("reporting", {}).get("max_calibration_sequences", 40000) or 40000)
-        calibration_sequences = self._evenly_sample_sequences(calibration_sequences, max_calibration)
-        print(f"Calibrating on {len(calibration_sequences)} representative sequences...", flush=True)
-        ae_error, if_anomaly, _ = self._raw_sequence_scores(calibration_sequences)
+        split_names = "train+validation+test" if include_test else "train+validation"
+        print(f"Calibrating KDE on all {len(calibration_sequences)} {split_names} sequences...", flush=True)
+        ae_error, if_anomaly, _ = self._raw_sequence_scores(
+            calibration_sequences,
+            calculate_combined=False,
+        )
         if ae_error.size == 0 or if_anomaly.size == 0:
-            return
-        scale_low_q = float(calibration.get("scale_low_quantile", 0.50))
-        scale_high_q = float(calibration.get("scale_high_quantile", 0.995))
+            raise ValueError("No scores are available for KDE threshold calibration")
+        low_quantile = float(calibration.get("scale_low_quantile", 0.50))
+        high_quantile = float(calibration.get("scale_high_quantile", 0.999))
         calibration["ae_error_bounds"] = {
-            "low": float(np.quantile(ae_error, scale_low_q)),
-            "high": float(np.quantile(ae_error, scale_high_q)),
+            "low": float(np.quantile(ae_error, low_quantile)),
+            "high": float(np.quantile(ae_error, high_quantile)),
         }
         calibration["if_anomaly_bounds"] = {
-            "low": float(np.quantile(if_anomaly, scale_low_q)),
-            "high": float(np.quantile(if_anomaly, scale_high_q)),
+            "low": float(np.quantile(if_anomaly, low_quantile)),
+            "high": float(np.quantile(if_anomaly, high_quantile)),
         }
+        self.config["risk_calibration"] = calibration
         _, _, combined = self._raw_sequence_scores(calibration_sequences)
-        low_q = float(calibration.get("low_quantile", 0.90))
-        medium_q = float(calibration.get("medium_quantile", 0.97))
-        high_q = float(calibration.get("high_quantile", 0.995))
-        calibration["risk_thresholds"] = {
-            "low": float(np.quantile(combined, low_q)),
-            "medium": float(np.quantile(combined, medium_q)),
-            "high": float(np.quantile(combined, high_q)),
-        }
+        thresholds, kde_metadata = self._kde_cdf_thresholds(combined, calibration)
+        calibration["method"] = "kde"
+        calibration["risk_thresholds"] = thresholds
+        calibration["kde_threshold_metadata"] = kde_metadata
         calibration["calibration_sample_count"] = int(combined.size)
+        calibration["calibration_splits"] = {
+            "train": int(len(train_sequences)),
+            "validation": int(len(val_sequences)),
+            "test": int(len(test_sequences)) if include_test and test_sequences else 0,
+        }
+        self.kde_calibration_scores = np.asarray(combined, dtype="<f8")
         self.config["risk_calibration"] = calibration
 
     def _risk_level_counts(self, scores: np.ndarray) -> Dict[str, int]:
-        thresholds = self.config.get("risk_calibration", {}).get("risk_thresholds", {})
-        low = float(thresholds.get("low", 0.3))
-        medium = float(thresholds.get("medium", 0.65))
-        high = float(thresholds.get("high", 0.9))
+        thresholds = self._strict_kde_thresholds()
+        low, medium, high = thresholds["low"], thresholds["medium"], thresholds["high"]
         return {
             "no_risk": int(np.sum(scores < low)),
             "low": int(np.sum((scores >= low) & (scores < medium))),
             "medium": int(np.sum((scores >= medium) & (scores < high))),
             "high": int(np.sum(scores >= high)),
         }
+
+    def _strict_kde_thresholds(self) -> Dict[str, float]:
+        calibration = self.config.get("risk_calibration", {})
+        if calibration.get("enabled") is not True or calibration.get("method") != "kde":
+            raise ValueError("Missing strict KDE risk calibration")
+        thresholds = calibration.get("risk_thresholds")
+        if not isinstance(thresholds, dict) or set(thresholds) != {"low", "medium", "high"}:
+            raise ValueError("KDE thresholds must contain exactly low/medium/high")
+        values = {name: float(thresholds[name]) for name in ("low", "medium", "high")}
+        if not all(np.isfinite(value) for value in values.values()):
+            raise ValueError("KDE thresholds contain non-finite values")
+        if not (0.0 <= values["low"] < values["medium"] < values["high"] <= 1.0):
+            raise ValueError("KDE thresholds must be strictly ordered within [0, 1]")
+        metadata = calibration.get("kde_threshold_metadata", {})
+        if metadata.get("threshold_derivation") != "inverse of bounded Gaussian KDE CDF; no threshold override":
+            raise ValueError("KDE threshold provenance is missing or invalid")
+        return values
 
     def _score_frame(self, split_name: str, sequences: List[tuple]) -> pd.DataFrame:
         ae_error, if_anomaly, combined = self._raw_sequence_scores(sequences)
@@ -880,10 +978,9 @@ class MudCakeTrainer:
         scores_path = report_dir / "sequence_scores.csv"
         scores_df.to_csv(scores_path, index=False, encoding="utf-8-sig")
 
-        thresholds = self.config.get("risk_calibration", {}).get("risk_thresholds", {})
-        low = float(thresholds.get("low", 0.3))
-        medium = float(thresholds.get("medium", 0.65))
-        high = float(thresholds.get("high", 0.9))
+        thresholds = self._strict_kde_thresholds()
+        calibration = self.config.get("risk_calibration", {})
+        low, medium, high = thresholds["low"], thresholds["medium"], thresholds["high"]
         test_scores = scores_df[scores_df["split"] == "test"]["risk_score"].to_numpy(dtype=float)
         counts = self._risk_level_counts(test_scores)
         total = max(1, int(test_scores.size))
@@ -908,6 +1005,8 @@ class MudCakeTrainer:
             "threshold_low": low,
             "threshold_medium": medium,
             "threshold_high": high,
+            "threshold_method": calibration["method"],
+            "kde_threshold_metadata": calibration.get("kde_threshold_metadata", {}),
         }
         metrics_path = report_dir / "metrics.json"
         with open(metrics_path, "w", encoding="utf-8") as f:
@@ -1104,11 +1203,18 @@ class MudCakeTrainer:
         }
 
     def save_models(self) -> None:
+        self._strict_kde_thresholds()
+        if self.kde_calibration_scores is None or self.kde_calibration_scores.size < 20:
+            raise ValueError("KDE calibration scores are missing; refusing to save model")
         if self.autoencoder is not None:
             self.autoencoder.save_weights(self.model_dir / "mud_cake_autoencoder.weights.h5")
         if self.isolation_forest is not None:
             joblib.dump(self.isolation_forest, self.model_dir / "mud_cake_isolation_forest.pkl")
         joblib.dump({"robust": self.robust_scalers}, self.model_dir / "mud_cake_scalers.pkl")
+        np.save(
+            self.model_dir / KDE_CALIBRATION_SCORES_FILENAME,
+            np.asarray(self.kde_calibration_scores, dtype="<f8"),
+        )
         model_info = {
             "learning_type": "unsupervised_normal_only",
             "training_mode": "stratum_specific" if self.stratum_label is not None else "unified",
@@ -1134,6 +1240,55 @@ class MudCakeTrainer:
         print(f"模型保存完成: {self.model_dir}")
 
 
+def validate_saved_kde_model(model_dir: Path, expected_label: str) -> Dict[str, Any]:
+    required = [
+        model_dir / "mud_cake_model_info.json",
+        model_dir / "mud_cake_autoencoder.weights.h5",
+        model_dir / "mud_cake_isolation_forest.pkl",
+        model_dir / "mud_cake_scalers.pkl",
+        model_dir / KDE_CALIBRATION_SCORES_FILENAME,
+    ]
+    missing = [path.name for path in required if not path.is_file()]
+    if missing:
+        raise ValueError(f"Cluster {expected_label} model artifacts are incomplete: {missing}")
+
+    with open(model_dir / "mud_cake_model_info.json", "r", encoding="utf-8") as f:
+        model_info = json.load(f)
+    if str(model_info.get("stratum_label")) != str(expected_label):
+        raise ValueError(f"Cluster {expected_label} model label does not match its directory")
+
+    calibration = model_info.get("config", {}).get("risk_calibration", {})
+    if calibration.get("enabled") is not True or calibration.get("method") != "kde":
+        raise ValueError(f"Cluster {expected_label} does not contain strict KDE calibration")
+    saved_thresholds = calibration.get("risk_thresholds", {})
+    if set(saved_thresholds) != {"low", "medium", "high"}:
+        raise ValueError(f"Cluster {expected_label} KDE thresholds are incomplete")
+
+    scores = np.load(model_dir / KDE_CALIBRATION_SCORES_FILENAME, allow_pickle=False)
+    scores = np.asarray(scores, dtype="<f8").reshape(-1)
+    if scores.size != int(calibration.get("calibration_sample_count", -1)):
+        raise ValueError(f"Cluster {expected_label} KDE score count does not match model metadata")
+    score_hash = hashlib.sha256(np.ascontiguousarray(scores).tobytes()).hexdigest()
+    metadata = calibration.get("kde_threshold_metadata", {})
+    if score_hash != metadata.get("score_sha256"):
+        raise ValueError(f"Cluster {expected_label} KDE calibration score hash mismatch")
+    recomputed, _ = MudCakeTrainer._kde_cdf_thresholds(scores, calibration)
+    for name in ("low", "medium", "high"):
+        if not np.isclose(float(saved_thresholds[name]), recomputed[name], rtol=0.0, atol=1e-12):
+            raise ValueError(
+                f"Cluster {expected_label} threshold {name} is not the KDE result: "
+                f"saved={saved_thresholds[name]}, recomputed={recomputed[name]}"
+            )
+    return {
+        "label": str(expected_label),
+        "thresholds": {name: float(saved_thresholds[name]) for name in ("low", "medium", "high")},
+        "score_count": int(scores.size),
+        "score_sha256": score_hash,
+        "bandwidth": float(metadata["bandwidth"]),
+        "cdf_levels": metadata["cdf_levels"],
+    }
+
+
 def train_stratum_models(data_dirs: Iterable[Path]) -> Dict[str, Any]:
     data_dirs = list(data_dirs)
     print("训练数据目录:")
@@ -1143,6 +1298,8 @@ def train_stratum_models(data_dirs: Iterable[Path]) -> Dict[str, Any]:
     strata = validate_expected_strata(data)
     print(f"检测到完整六类地层，按固定顺序训练: {strata}")
     STRATUM_MODEL_ROOT.mkdir(parents=True, exist_ok=True)
+    manifest_path = MODEL_DIR / "mud_cake_strata_manifest.json"
+    manifest_path.unlink(missing_ok=True)
     results = {}
     manifest = {
         "learning_type": "unsupervised_normal_only",
@@ -1156,6 +1313,7 @@ def train_stratum_models(data_dirs: Iterable[Path]) -> Dict[str, Any]:
         print(f"\n开始训练地层 Cluster_Label={label} 的结泥饼模型 -> {model_dir}")
         trainer = MudCakeTrainer(model_dir=model_dir, stratum_label=label)
         result = trainer.train_from_dataframe(data)
+        kde_audit = validate_saved_kde_model(model_dir, label)
         results[label] = result
         manifest["strata"][label] = {
             "model_dir": str(model_dir.relative_to(MODEL_DIR)),
@@ -1164,8 +1322,13 @@ def train_stratum_models(data_dirs: Iterable[Path]) -> Dict[str, Any]:
             "sequence_count": result["sequence_count"],
             "data_size": result["data_size"],
             "report": result["report"],
+            "kde_audit": kde_audit,
         }
-    with open(MODEL_DIR / "mud_cake_strata_manifest.json", "w", encoding="utf-8") as f:
+    if set(manifest["strata"]) != set(EXPECTED_STRATA):
+        raise RuntimeError("Six-stratum training did not produce exactly Cluster_Label=0..5")
+    for label in EXPECTED_STRATA:
+        validate_saved_kde_model(STRATUM_MODEL_ROOT / f"cluster_{label}", label)
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
     return {"status": "success", "training_mode": "stratum_specific", "strata": results}
 

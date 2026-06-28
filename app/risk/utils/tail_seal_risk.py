@@ -5,11 +5,11 @@ UNIFIED_REQUIRED_PARAMS = {
     "Tail.Seal.Rear.Prs.02": "2#盾尾密封后压力",
     "Tail.Seal.Rear.Prs.04": "4#盾尾密封后压力",
     "Tail.Seal.Rear.Prs.06": "6#盾尾密封后压力",
-    "Tail.Seal.Rear.Prs.09": "9#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.08": "8#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.10": "10#盾尾密封后压力",
     "Tail.Seal.Rear.Prs.12": "12#盾尾密封后压力",
-    "Tail.Seal.Rear.Prs.15": "15#盾尾密封后压力",
-    "Tail.Seal.Rear.Prs.17": "17#盾尾密封后压力",
-    "Tail.Seal.Rear.Prs.19": "19#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.14": "14#盾尾密封后压力",
+    "Tail.Seal.Rear.Prs.16": "16#盾尾密封后压力",
     "LiqPump.A.Out.Prs.01": "1#A液泵出口压力",
     "LiqPump.A.Out.Prs.02": "2#A液泵出口压力",
     "LiqPump.A.Out.Prs.03": "3#A液泵出口压力",
@@ -24,11 +24,11 @@ UNIFIED_SEAL_SENSORS = [
     "Tail.Seal.Rear.Prs.02",
     "Tail.Seal.Rear.Prs.04",
     "Tail.Seal.Rear.Prs.06",
-    "Tail.Seal.Rear.Prs.09",
+    "Tail.Seal.Rear.Prs.08",
+    "Tail.Seal.Rear.Prs.10",
     "Tail.Seal.Rear.Prs.12",
-    "Tail.Seal.Rear.Prs.15",
-    "Tail.Seal.Rear.Prs.17",
-    "Tail.Seal.Rear.Prs.19",
+    "Tail.Seal.Rear.Prs.14",
+    "Tail.Seal.Rear.Prs.16",
 ]
 UNIFIED_GROUT_SENSORS = [
     "LiqPump.A.Out.Prs.01",
@@ -54,11 +54,11 @@ RISK_SPEC = {
         "2#盾尾密封后压力": "bar",
         "4#盾尾密封后压力": "bar",
         "6#盾尾密封后压力": "bar",
-        "9#盾尾密封后压力": "bar",
+        "8#盾尾密封后压力": "bar",
+        "10#盾尾密封后压力": "bar",
         "12#盾尾密封后压力": "bar",
-        "15#盾尾密封后压力": "bar",
-        "17#盾尾密封后压力": "bar",
-        "19#盾尾密封后压力": "bar",
+        "14#盾尾密封后压力": "bar",
+        "16#盾尾密封后压力": "bar",
         "1#A液泵出口压力": "bar",
         "2#A液泵出口压力": "bar",
         "3#A液泵出口压力": "bar",
@@ -111,6 +111,10 @@ def _is_valid_sensor_value(value: Any) -> bool:
     return not (np.isnan(value) or np.isinf(value))
 
 
+def _is_valid_pressure(value: Any) -> bool:
+    return _is_valid_sensor_value(value) and float(value) >= 0.0
+
+
 def _get_sensor_raw_value(data: Dict[str, Any], sensor_key: str) -> Any:
     if sensor_key in data and data[sensor_key] is not None:
         return data[sensor_key]
@@ -123,12 +127,13 @@ def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
         'grout_pressures': []
     }
 
-    # 严格校验：如果所有的密封压力传感器或者注浆压力传感器都在数据中缺失，则抛出异常
-    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if not _is_valid_sensor_value(_get_sensor_raw_value(data, s))]
-    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if not _is_valid_sensor_value(_get_sensor_raw_value(data, s))]
+    # 严格校验：固定输入字段必须全部有效，禁止使用部分传感器数据兜底计算。
+    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if not _is_valid_pressure(_get_sensor_raw_value(data, s))]
+    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if not _is_valid_pressure(_get_sensor_raw_value(data, s))]
 
-    if len(missing_seal) == len(UNIFIED_SEAL_SENSORS) and len(missing_grout) == len(UNIFIED_GROUT_SENSORS):
-        raise ValueError("盾尾密封风险计算缺少所有压力数据")
+    missing = missing_seal + missing_grout
+    if missing:
+        raise ValueError(f"盾尾密封风险计算缺少必要字段: {', '.join(missing)}")
 
     for sensor in UNIFIED_SEAL_SENSORS:
         mapped_data['seal_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))

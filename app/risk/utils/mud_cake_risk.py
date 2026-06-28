@@ -8,7 +8,6 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 
-
 DEFAULT_RANDOM_SEED = 42
 RISK_MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 MUD_CAKE_MODEL_INFO_FILENAME = "mud_cake_model_info.json"
@@ -402,14 +401,6 @@ def calibrated_combined_risk(
     if calibration.get("enabled") and calibration.get("ae_error_bounds") and calibration.get("if_anomaly_bounds"):
         norm_err = scale_by_bounds(ae_error, calibration.get("ae_error_bounds", {}))
         norm_if = scale_by_bounds(if_anomaly, calibration.get("if_anomaly_bounds", {}))
-        try:
-            if float(np.max(norm_err) - np.min(norm_err)) < 1e-6:
-                norm_err = minmax(ae_error)
-            if float(np.max(norm_if) - np.min(norm_if)) < 1e-6:
-                norm_if = minmax(if_anomaly)
-        except Exception:
-            norm_err = minmax(ae_error)
-            norm_if = minmax(if_anomaly)
     else:
         norm_err = minmax(ae_error)
         norm_if = minmax(if_anomaly)
@@ -424,16 +415,20 @@ def calibrated_combined_risk(
 
 def risk_thresholds(config: Dict[str, Any]) -> Dict[str, float]:
     calibration = config.get("risk_calibration", {}) if isinstance(config, dict) else {}
-    thresholds = calibration.get("risk_thresholds", {}) if isinstance(calibration, dict) else {}
-    if not isinstance(thresholds, dict) or not thresholds:
-        raise RuntimeError("缺少模型阈值 risk_calibration.risk_thresholds")
-    if "low" not in thresholds or "medium" not in thresholds or "high" not in thresholds:
-        raise RuntimeError("模型阈值 risk_calibration.risk_thresholds 必须包含 low/medium/high")
-    return {
-        "low": float(thresholds["low"]),
-        "medium": float(thresholds["medium"]),
-        "high": float(thresholds["high"]),
-    }
+    if calibration.get("enabled") is not True or calibration.get("method") != "kde":
+        raise RuntimeError("结泥饼模型必须使用训练阶段保存的 KDE 风险阈值")
+    thresholds = calibration.get("risk_thresholds")
+    if not isinstance(thresholds, dict) or set(thresholds) != {"low", "medium", "high"}:
+        raise RuntimeError("KDE 风险阈值必须且只能包含 low/medium/high")
+    values = {name: float(thresholds[name]) for name in ("low", "medium", "high")}
+    if not all(np.isfinite(value) for value in values.values()):
+        raise RuntimeError("KDE 风险阈值包含非有限数值")
+    if not (0.0 <= values["low"] < values["medium"] < values["high"] <= 1.0):
+        raise RuntimeError("KDE 风险阈值必须在 [0,1] 内严格递增")
+    metadata = calibration.get("kde_threshold_metadata", {})
+    if metadata.get("threshold_derivation") != "inverse of bounded Gaussian KDE CDF; no threshold override":
+        raise RuntimeError("KDE 风险阈值来源校验失败")
+    return values
 
 
 def risk_level_from_score(score: float, config: Dict[str, Any]) -> str:
@@ -445,6 +440,24 @@ def risk_level_from_score(score: float, config: Dict[str, Any]) -> str:
     if score >= thresholds["low"]:
         return "low"
     return "no_risk"
+
+
+def load_autoencoder_weights(model: tf.keras.Model, weights_path: Path) -> None:
+    """Load current or legacy HDF5 weights without changing trained values."""
+    try:
+        model.load_weights(weights_path)
+        return
+    except ValueError as current_format_error:
+        try:
+            import h5py
+            from keras.src.legacy.saving import legacy_h5_format
+
+            with h5py.File(weights_path, "r") as h5_file:
+                if "layer_names" not in h5_file.attrs:
+                    raise current_format_error
+                legacy_h5_format.load_weights_from_hdf5_group(h5_file, model)
+        except Exception:
+            raise current_format_error
 
 
 def flat_feature_weights(features: List[str], weight_map: Dict[str, float], window_points: int) -> np.ndarray:
@@ -683,6 +696,8 @@ class UnsupervisedMudCakeDetector:
                 model_info = json.load(f)
             self.model_info = model_info
             self.config = model_info['config']
+            # 模型加载时立即校验训练产物中的 KDE 阈值；禁止推理使用默认值或另一套阈值。
+            risk_thresholds(self.config)
             self.all_features = model_info['features']
             self.feature_dim = model_info['feature_dim']
             ae_params = self.config['autoencoder_params']
@@ -695,7 +710,7 @@ class UnsupervisedMudCakeDetector:
             )
             dummy = tf.zeros((1, int(self.config['sequence_length']), int(self.feature_dim)))
             _ = self.autoencoder(dummy, training=False)
-            self.autoencoder.load_weights(weights_path)
+            load_autoencoder_weights(self.autoencoder, weights_path)
             self.isolation_forest = joblib.load(isolation_forest_path)
             scalers_pack = joblib.load(scalers_path)
             if not isinstance(scalers_pack, dict):
@@ -827,7 +842,6 @@ class MudCakeRiskCalculator:
             scores = self.detector.isolation_forest.decision_function(trend_vectors)
             calibrated_risk = calibrated_combined_risk(err, -scores, self.detector.config)
             thresholds = risk_thresholds(self.detector.config)
-
             norm_err = minmax(err)
             norm_if = minmax(-scores)
             rf = self.detector.config.get('risk_fusion', {})
@@ -842,7 +856,7 @@ class MudCakeRiskCalculator:
             combined = calibrated_risk
             # 趋势门控逻辑已删除：直接使用融合分作为风险值
 
-            # 段落（高风险≥0.9）与最早触发（中风险≥0.65）
+            # 段落和最早触发均使用当前地层模型训练保存的 KDE 阈值。
             segments = []
             in_seg = False
             seg_start = 0

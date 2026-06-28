@@ -1,4 +1,4 @@
- {
+{
   "learning_type": "unsupervised_normal_only",
   "training_mode": "stratum_specific",
   "selector_feature": "Cluster_Label",
@@ -32,7 +32,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 17761,
+      "sequence_count": 17798,
       "data_size": 179400,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_0\\training_report",
@@ -47,18 +47,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 11119,
-          "val_sequences": 3331,
-          "test_sequences": 3311,
-          "test_no_risk_rate": 0.9737239504681365,
-          "test_low_rate": 0.02476593174267593,
-          "test_medium_rate": 0.0015101177891875567,
-          "test_high_rate": 0.0,
-          "test_medium_high_rate": 0.0015101177891875567,
-          "test_high_rate_only": 0.0,
-          "threshold_low": 0.6656949950053763,
-          "threshold_medium": 0.8917658120393809,
-          "threshold_high": 0.9255421516708893
+          "train_sequences": 11133,
+          "val_sequences": 3338,
+          "test_sequences": 3327,
+          "test_no_risk_rate": 0.8659452960625188,
+          "test_low_rate": 0.1145175834084761,
+          "test_medium_rate": 0.015329125338142471,
+          "test_high_rate": 0.004207995190862639,
+          "test_medium_high_rate": 0.01953712052900511,
+          "test_high_rate_only": 0.004207995190862639,
+          "threshold_low": 0.4415420587895576,
+          "threshold_medium": 0.7371917577157673,
+          "threshold_high": 0.8754969735652884,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.01579921678091913,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.9553831706217768,
+            "score_mean": 0.10199103156316716,
+            "score_std": 0.14843687857347884,
+            "score_sha256": "e93a25b1c8832fdaf8e4963d9c6502225c895929f08cbb27e8740938381151c6",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_0\\training_report\\loss_curve.png",
@@ -67,6 +90,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_0\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_0\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "0",
+        "thresholds": {
+          "low": 0.4415420587895576,
+          "medium": 0.7371917577157673,
+          "high": 0.8754969735652884
+        },
+        "score_count": 17798,
+        "score_sha256": "e93a25b1c8832fdaf8e4963d9c6502225c895929f08cbb27e8740938381151c6",
+        "bandwidth": 0.01579921678091913,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     },
     "1": {
@@ -90,7 +129,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 23861,
+      "sequence_count": 24407,
       "data_size": 344425,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_1\\training_report",
@@ -105,18 +144,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 10437,
-          "val_sequences": 4320,
-          "test_sequences": 9104,
-          "test_no_risk_rate": 0.9958260105448155,
-          "test_low_rate": 0.0041739894551845345,
-          "test_medium_rate": 0.0,
-          "test_high_rate": 0.0,
-          "test_medium_high_rate": 0.0,
-          "test_high_rate_only": 0.0,
-          "threshold_low": 0.8971977782657572,
-          "threshold_medium": 0.990812658667564,
-          "threshold_high": 0.997021700203419
+          "train_sequences": 10514,
+          "val_sequences": 4609,
+          "test_sequences": 9284,
+          "test_no_risk_rate": 0.9053209823352003,
+          "test_low_rate": 0.08573890564411892,
+          "test_medium_rate": 0.007216716932356743,
+          "test_high_rate": 0.0017233950883239983,
+          "test_medium_high_rate": 0.008940112020680742,
+          "test_high_rate_only": 0.0017233950883239983,
+          "threshold_low": 0.6651057345594221,
+          "threshold_medium": 0.8388688614702492,
+          "threshold_high": 0.9078100414362629,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.028122495439915664,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.9912748990602462,
+            "score_mean": 0.17747383718685522,
+            "score_std": 0.23567055724773597,
+            "score_sha256": "e74ee675c6447fd9177eb05515a5008e2bc045533d1ee7a58cf333b5da8aa3a3",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_1\\training_report\\loss_curve.png",
@@ -125,6 +187,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_1\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_1\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "1",
+        "thresholds": {
+          "low": 0.6651057345594221,
+          "medium": 0.8388688614702492,
+          "high": 0.9078100414362629
+        },
+        "score_count": 24407,
+        "score_sha256": "e74ee675c6447fd9177eb05515a5008e2bc045533d1ee7a58cf333b5da8aa3a3",
+        "bandwidth": 0.028122495439915664,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     },
     "2": {
@@ -148,7 +226,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 2014,
+      "sequence_count": 1901,
       "data_size": 33616,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_2\\training_report",
@@ -163,18 +241,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 1190,
-          "val_sequences": 389,
-          "test_sequences": 435,
-          "test_no_risk_rate": 0.9770114942528736,
-          "test_low_rate": 0.020689655172413793,
-          "test_medium_rate": 0.0022988505747126436,
-          "test_high_rate": 0.0,
-          "test_medium_high_rate": 0.0022988505747126436,
-          "test_high_rate_only": 0.0,
-          "threshold_low": 0.7766755039365463,
-          "threshold_medium": 0.8633005343291096,
-          "threshold_high": 0.9031114076036384
+          "train_sequences": 1038,
+          "val_sequences": 396,
+          "test_sequences": 467,
+          "test_no_risk_rate": 0.8843683083511777,
+          "test_low_rate": 0.1006423982869379,
+          "test_medium_rate": 0.01284796573875803,
+          "test_high_rate": 0.0021413276231263384,
+          "test_medium_high_rate": 0.014989293361884369,
+          "test_high_rate_only": 0.0021413276231263384,
+          "threshold_low": 0.40458687419248107,
+          "threshold_medium": 0.599409474763555,
+          "threshold_high": 0.9252009061807512,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.028691285003744238,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.9431374251120066,
+            "score_mean": 0.13303863853732018,
+            "score_std": 0.14427452578868283,
+            "score_sha256": "15e28c3e4a4237f081e0375d11c7b33cb2c6343b3805cc28fc9e6a767377a344",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_2\\training_report\\loss_curve.png",
@@ -183,6 +284,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_2\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_2\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "2",
+        "thresholds": {
+          "low": 0.40458687419248107,
+          "medium": 0.599409474763555,
+          "high": 0.9252009061807512
+        },
+        "score_count": 1901,
+        "score_sha256": "15e28c3e4a4237f081e0375d11c7b33cb2c6343b3805cc28fc9e6a767377a344",
+        "bandwidth": 0.028691285003744238,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     },
     "3": {
@@ -206,7 +323,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 11866,
+      "sequence_count": 11311,
       "data_size": 157553,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_3\\training_report",
@@ -221,18 +338,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 8782,
-          "val_sequences": 1265,
+          "train_sequences": 8222,
+          "val_sequences": 1270,
           "test_sequences": 1819,
-          "test_no_risk_rate": 0.9846069268829027,
-          "test_low_rate": 0.013743815283122594,
-          "test_medium_rate": 0.0016492578339747114,
-          "test_high_rate": 0.0,
-          "test_medium_high_rate": 0.0016492578339747114,
-          "test_high_rate_only": 0.0,
-          "threshold_low": 0.6691250080216625,
-          "threshold_medium": 0.906089660504532,
-          "threshold_high": 0.9685247098077441
+          "test_no_risk_rate": 0.9169873556899395,
+          "test_low_rate": 0.06761957119296316,
+          "test_medium_rate": 0.010995052226498075,
+          "test_high_rate": 0.0043980208905992305,
+          "test_medium_high_rate": 0.015393073117097306,
+          "test_high_rate_only": 0.0043980208905992305,
+          "threshold_low": 0.3680883516345121,
+          "threshold_medium": 0.6623766404122453,
+          "threshold_high": 0.8095888723610819,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.013686722851670345,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.8919982726375264,
+            "score_mean": 0.09022109974596598,
+            "score_std": 0.12044985498781115,
+            "score_sha256": "9d747eefc60fcb3876a67abf15fd56c623d4b27fc2ebb3e534471965276bcb1a",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_3\\training_report\\loss_curve.png",
@@ -241,6 +381,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_3\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_3\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "3",
+        "thresholds": {
+          "low": 0.3680883516345121,
+          "medium": 0.6623766404122453,
+          "high": 0.8095888723610819
+        },
+        "score_count": 11311,
+        "score_sha256": "9d747eefc60fcb3876a67abf15fd56c623d4b27fc2ebb3e534471965276bcb1a",
+        "bandwidth": 0.013686722851670345,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     },
     "4": {
@@ -264,7 +420,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 1818,
+      "sequence_count": 1831,
       "data_size": 24878,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_4\\training_report",
@@ -279,18 +435,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 1090,
-          "val_sequences": 364,
-          "test_sequences": 364,
-          "test_no_risk_rate": 0.9972527472527473,
-          "test_low_rate": 0.0027472527472527475,
-          "test_medium_rate": 0.0,
+          "train_sequences": 1098,
+          "val_sequences": 366,
+          "test_sequences": 367,
+          "test_no_risk_rate": 0.9509536784741145,
+          "test_low_rate": 0.04632152588555858,
+          "test_medium_rate": 0.0027247956403269754,
           "test_high_rate": 0.0,
-          "test_medium_high_rate": 0.0,
+          "test_medium_high_rate": 0.0027247956403269754,
           "test_high_rate_only": 0.0,
-          "threshold_low": 0.6660468706012507,
-          "threshold_medium": 0.7790366175518728,
-          "threshold_high": 0.8072818847104901
+          "threshold_low": 0.3826345138551336,
+          "threshold_medium": 0.6689608765905514,
+          "threshold_high": 0.7201711525745117,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.028064769098920625,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.7166855990496609,
+            "score_mean": 0.13386446502730806,
+            "score_std": 0.14006770266279323,
+            "score_sha256": "f864a2e1f82ce71bb0d5ecfe7bb914a44a477f6b4e9444d87b8f43506417ec86",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_4\\training_report\\loss_curve.png",
@@ -299,6 +478,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_4\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_4\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "4",
+        "thresholds": {
+          "low": 0.3826345138551336,
+          "medium": 0.6689608765905514,
+          "high": 0.7201711525745117
+        },
+        "score_count": 1831,
+        "score_sha256": "f864a2e1f82ce71bb0d5ecfe7bb914a44a477f6b4e9444d87b8f43506417ec86",
+        "bandwidth": 0.028064769098920625,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     },
     "5": {
@@ -322,7 +517,7 @@
         "重型圆锥动力触探锤击数N"
       ],
       "feature_count": 768,
-      "sequence_count": 2744,
+      "sequence_count": 2747,
       "data_size": 35473,
       "report": {
         "report_dir": "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_5\\training_report",
@@ -337,18 +532,41 @@
           "window_points": 48,
           "window_stride": 8,
           "sequence_stride": 1,
-          "train_sequences": 2241,
-          "val_sequences": 114,
+          "train_sequences": 2242,
+          "val_sequences": 116,
           "test_sequences": 389,
-          "test_no_risk_rate": 1.0,
-          "test_low_rate": 0.0,
+          "test_no_risk_rate": 0.87146529562982,
+          "test_low_rate": 0.12853470437017994,
           "test_medium_rate": 0.0,
           "test_high_rate": 0.0,
           "test_medium_high_rate": 0.0,
           "test_high_rate_only": 0.0,
-          "threshold_low": 0.6359994864460478,
-          "threshold_medium": 0.73937859479338,
-          "threshold_high": 0.7536959605067965
+          "threshold_low": 0.44817639681621463,
+          "threshold_medium": 0.6638756856690414,
+          "threshold_high": 0.734859765467362,
+          "threshold_method": "kde",
+          "kde_threshold_metadata": {
+            "method": "kde",
+            "kernel": "gaussian",
+            "cdf_model": "gaussian_kde_conditioned_on_[0,1]",
+            "bandwidth_method": "silverman_robust",
+            "bandwidth": 0.016379296766055516,
+            "cdf_levels": {
+              "low": 0.95,
+              "medium": 0.995,
+              "high": 0.999
+            },
+            "support": [
+              0.0,
+              1.0
+            ],
+            "score_min": 0.0,
+            "score_max": 0.7486380330318483,
+            "score_mean": 0.09014277833624314,
+            "score_std": 0.13908500261771925,
+            "score_sha256": "56e423d76085d2d160b6ba4904fe6e37e56e918de97e07f6fbcc9d769bcf5968",
+            "threshold_derivation": "inverse of bounded Gaussian KDE CDF; no threshold override"
+          }
         },
         "figures": [
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_5\\training_report\\loss_curve.png",
@@ -357,6 +575,22 @@
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_5\\training_report\\test_risk_levels.png",
           "E:\\flink\\TBM_ECUST\\app\\risk\\models\\mud_cake_by_stratum\\cluster_5\\training_report\\training_dashboard.png"
         ]
+      },
+      "kde_audit": {
+        "label": "5",
+        "thresholds": {
+          "low": 0.44817639681621463,
+          "medium": 0.6638756856690414,
+          "high": 0.734859765467362
+        },
+        "score_count": 2747,
+        "score_sha256": "56e423d76085d2d160b6ba4904fe6e37e56e918de97e07f6fbcc9d769bcf5968",
+        "bandwidth": 0.016379296766055516,
+        "cdf_levels": {
+          "low": 0.95,
+          "medium": 0.995,
+          "high": 0.999
+        }
       }
     }
   }
