@@ -6,7 +6,11 @@ def create_app(config_class=None):
     if config_class is not None:
         app.config.from_object(config_class)
 
-    from app.risk.routes import bp as risk_bp
+    from app.risk import routes as risk_routes
+    from app.risk.misc_routes import register_misc_routes
+
+    risk_bp = risk_routes.bp
+    register_misc_routes(risk_bp, risk_routes)
     app.register_blueprint(risk_bp, url_prefix='/risk')
 
     return app

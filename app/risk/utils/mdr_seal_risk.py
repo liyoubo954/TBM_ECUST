@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Any
 
-from app.risk.utils.sensor_validation import require_nonnegative_sensor_values
+from app.risk.utils.sensor_validation import require_finite_sensor_values
 
 UNIFIED_REQUIRED_PARAMS = {
     'WorkCham.Prs.01': '1#工作仓压力',
@@ -55,7 +55,7 @@ RISK_SPEC = {
 
 
 def map_project_data(data: Dict[str, Any]) -> Dict[str, float]:
-    values = require_nonnegative_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "主驱动密封风险")
+    values = require_finite_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "主驱动密封风险")
     return {
         'P0': values['WorkCham.Prs.01'],
         'P1': values['EP2.OutSeal.Grs.Prs.01'],

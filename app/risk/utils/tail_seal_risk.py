@@ -1,6 +1,6 @@
 from typing import Dict, List, Any
 
-from app.risk.utils.sensor_validation import require_nonnegative_sensor_values
+from app.risk.utils.sensor_validation import require_finite_sensor_values
 
 UNIFIED_REQUIRED_PARAMS = {
     "Tail.Seal.Rear.Prs.02": "2#盾尾密封后压力",
@@ -97,7 +97,7 @@ RISK_SPEC = {
 
 
 def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
-    values = require_nonnegative_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "盾尾密封风险")
+    values = require_finite_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "盾尾密封风险")
     return {
         'seal_pressures': [values[sensor] for sensor in UNIFIED_SEAL_SENSORS],
         'grout_pressures': [values[sensor] for sensor in UNIFIED_GROUT_SENSORS],

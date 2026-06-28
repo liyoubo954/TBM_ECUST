@@ -1,10 +1,13 @@
 from typing import Dict, Any
 
-from app.risk.utils.sensor_validation import require_nonnegative_sensor_values
+from app.risk.utils.sensor_validation import require_finite_sensor_values
 
 LOW_RISK_PROBABILITY = 0.3
 MEDIUM_RISK_PROBABILITY = 0.7
 HIGH_RISK_PROBABILITY = 0.9
+
+PUMP_DIFF_LOW_THRESHOLD = 1.0
+PUMP_DIFF_MEDIUM_THRESHOLD = 3.0
 
 UNIFIED_REQUIRED_PARAMS = {
     'WorkCham.Prs.01': '1#工作仓压力',
@@ -54,7 +57,7 @@ RISK_SPEC = {
 
 
 def map_project_data(data: Dict[str, Any]):
-    values = require_nonnegative_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "滞排风险")
+    values = require_finite_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "滞排风险")
     return {
         'P_bubble': values['WorkCham.Prs.01'],
         'P_excav': values['ExcCham.Prs.04'],
@@ -67,15 +70,15 @@ def calculate_universal_clog_risk(data: Dict[str, Any]) -> Dict[str, Any]:
     diff_bubble_exc = mapped['P_bubble'] - mapped['P_excav']
     diff_bubble_pump = mapped['P_bubble'] - mapped['P_pump']
 
-    if diff_bubble_exc < -1 and diff_bubble_pump > 2:
+    if diff_bubble_exc < -1 and diff_bubble_pump > PUMP_DIFF_MEDIUM_THRESHOLD:
         risk_level, msg, prob = '高风险', '泥水环流系统滞排现象严重', HIGH_RISK_PROBABILITY
     elif diff_bubble_exc < -1:
         risk_level, msg, prob = '中风险', '开挖舱内明显滞排', MEDIUM_RISK_PROBABILITY
-    elif diff_bubble_pump > 2:
+    elif diff_bubble_pump > PUMP_DIFF_MEDIUM_THRESHOLD:
         risk_level, msg, prob = '中风险', '泥水脱离格栅处明显滞排', MEDIUM_RISK_PROBABILITY
     elif -1 <= diff_bubble_exc <= -0.5:
         risk_level, msg, prob = '低风险', '开挖舱内轻微滞排', LOW_RISK_PROBABILITY
-    elif 1 <= diff_bubble_pump <= 2:
+    elif PUMP_DIFF_LOW_THRESHOLD <= diff_bubble_pump <= PUMP_DIFF_MEDIUM_THRESHOLD:
         risk_level, msg, prob = '低风险', '泥水脱离格栅处轻微滞排', LOW_RISK_PROBABILITY
     else:
         risk_level, msg, prob = '无风险', '泥水环流系统无滞排风险', 0.0

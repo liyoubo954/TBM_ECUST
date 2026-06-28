@@ -341,20 +341,30 @@ def _load_project_geo_ring_cache():
         df["Ring_Index"] = pd.to_numeric(df["Ring_Index"], errors="coerce")
         df = df.dropna(subset=["Ring_Index"]).copy()
         df["Ring_Index"] = df["Ring_Index"].astype(int)
-        for _, row in df.iterrows():
-            source = _source_key(row.get("Source_File"))
+        column_index = {name: index for index, name in enumerate(df.columns)}
+        source_index = column_index["Source_File"]
+        ring_index = column_index["Ring_Index"]
+        cluster_index = column_index.get("Cluster_Label")
+        geo_columns = [
+            (feature, column_index[feature])
+            for feature in GEO_FEATURES
+            if feature in column_index
+        ]
+        for row in df.itertuples(index=False, name=None):
+            source = _source_key(row[source_index])
             if not source:
                 continue
-            ring = int(row["Ring_Index"])
+            ring = int(row[ring_index])
             item = {"Source_File": source, "Ring.No": ring}
-            if "Cluster_Label" in row and not pd.isna(row.get("Cluster_Label")):
+            if cluster_index is not None and not pd.isna(row[cluster_index]):
                 try:
-                    item["Cluster_Label"] = int(float(row.get("Cluster_Label")))
+                    item["Cluster_Label"] = int(float(row[cluster_index]))
                 except Exception:
-                    item["Cluster_Label"] = row.get("Cluster_Label")
-            for feature in GEO_FEATURES:
-                if feature in row and not pd.isna(row.get(feature)):
-                    item[feature] = row.get(feature)
+                    item["Cluster_Label"] = row[cluster_index]
+            for feature, feature_index in geo_columns:
+                value = row[feature_index]
+                if not pd.isna(value):
+                    item[feature] = value
             cache.setdefault(source, {})[ring] = item
     except Exception:
         traceback.print_exc()
@@ -1746,10 +1756,10 @@ def query_consecutive_ring_data(center_ring, count=6, measurement=None, fields=N
         if target_count <= 1:
             return query_ring_data(ring_int, measurement=measurement, fields=fields) or []
 
-        attempt = 0
+        initial_factor = max(1, _env_int("GETRISKLEVEL_RING_LOOKBACK_FACTOR", 3))
+        window = max(target_count, target_count * initial_factor)
         combined = []
         while True:
-            window = target_count * (2 ** attempt)
             start_ring = max(0, ring_int - (window - 1))
             points = query_ring_range_data(
                 start_ring,
@@ -1771,8 +1781,15 @@ def query_consecutive_ring_data(center_ring, count=6, measurement=None, fields=N
                         combined.append(p)
             if len(selected_rings) >= target_count or start_ring <= 0:
                 break
-            attempt += 1
-            if attempt > 30:
+
+            previous_window = window
+            # 环号数据存在较大断档时，小窗口会连续查空。查空后更激进地扩大窗口，
+            # 有数据但有效环不足时按 2 倍扩大，兼顾连续环和稀疏环两种场景。
+            window *= 4 if not points else 2
+            max_window = ring_int + 1
+            if window > max_window:
+                window = max_window
+            if window <= previous_window:
                 break
 
         if not combined:

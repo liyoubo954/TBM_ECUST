@@ -3,7 +3,7 @@ from typing import Any, Dict, Iterable
 import numpy as np
 
 
-def require_nonnegative_sensor_values(
+def require_finite_sensor_values(
     data: Dict[str, Any],
     fields: Iterable[str],
     risk_name: str,
@@ -23,7 +23,7 @@ def require_nonnegative_sensor_values(
         except (TypeError, ValueError):
             invalid.append(field)
             continue
-        if not np.isfinite(number) or number < 0.0:
+        if not np.isfinite(number):
             invalid.append(field)
             continue
         values[field] = number

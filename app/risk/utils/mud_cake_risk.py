@@ -332,16 +332,21 @@ def normalize_with_feature_mask(
 ) -> np.ndarray:
     if not scalers or len(scalers) != data.shape[1]:
         raise ValueError("missing or mismatched global_window scalers")
-    normalized = data.copy()
-    for i, scaler in enumerate(scalers):
-        col_mask = feature_mask[:, i]
-        median = float(scaler.get("median", 0.0))
-        mad = float(scaler.get("mad", 1.0)) or 1.0
-        transformed = (data[:, i] - median) / mad
-        if clip_zscore > 0:
-            transformed = np.clip(transformed, -clip_zscore, clip_zscore)
-        normalized[col_mask, i] = transformed[col_mask]
-        normalized[~col_mask, i] = 0.0
+    dtype = data.dtype if np.issubdtype(data.dtype, np.floating) else np.float64
+    medians = np.fromiter(
+        (float(scaler.get("median", 0.0)) for scaler in scalers),
+        dtype=dtype,
+        count=len(scalers),
+    )
+    mads = np.fromiter(
+        (float(scaler.get("mad", 1.0)) or 1.0 for scaler in scalers),
+        dtype=dtype,
+        count=len(scalers),
+    )
+    normalized = (data.astype(dtype, copy=False) - medians) / mads
+    if clip_zscore > 0:
+        np.clip(normalized, -clip_zscore, clip_zscore, out=normalized)
+    normalized[~feature_mask] = 0.0
     return normalized
 
 
@@ -440,39 +445,65 @@ def trend_vector(
 ) -> np.ndarray:
     feature_weights = np.array([float(weight_map.get(feature, 1.0)) for feature in features], dtype=np.float32)
     out: List[float] = []
+    feature_count = len(features)
+    x = np.arange(window_points, dtype=float)
+    feature_indexes = np.arange(feature_count)
+    if use_interactions:
+        pair_a, pair_b = np.triu_indices(feature_count, k=1)
+        pair_weights = feature_weights[pair_a] * feature_weights[pair_b]
     for row, mask_row in zip(seq, mask):
-        slopes: Dict[str, float] = {}
-        deltas: Dict[str, float] = {}
-        for j, feature in enumerate(features):
-            base = j * window_points
-            seg = row[base:base + window_points]
-            seg_mask = mask_row[base:base + window_points]
-            valid_idx = np.where(seg_mask)[0]
-            weight = float(feature_weights[j])
-            if valid_idx.size >= 3:
-                x = valid_idx.astype(float)
-                y = seg[valid_idx].astype(float)
-                x_mean = float(np.mean(x))
-                y_mean = float(np.mean(y))
-                denom = float(np.sum((x - x_mean) ** 2))
-                slope = (float(np.sum((x - x_mean) * (y - y_mean))) / denom) * weight if denom > 1e-12 else 0.0
-                delta = float(y[-1] - y[0]) * weight
-                curvature = 0.0
-                std = float(np.std(y)) * weight
-            else:
-                slope = delta = curvature = std = 0.0
-            slopes[feature] = slope
-            deltas[feature] = delta
-            out.extend([slope, delta, curvature, std])
+        values = np.asarray(row, dtype=float).reshape(feature_count, window_points)
+        valid = np.asarray(mask_row, dtype=bool).reshape(feature_count, window_points)
+        counts = valid.sum(axis=1)
+        eligible = counts >= 3
+        safe_counts = np.where(counts > 0, counts, 1)
+        safe_values = np.where(valid, values, 0.0)
+
+        x_means = (valid * x).sum(axis=1) / safe_counts
+        y_means = safe_values.sum(axis=1) / safe_counts
+        centered_x = np.where(valid, x - x_means[:, None], 0.0)
+        centered_y = np.where(valid, values - y_means[:, None], 0.0)
+        denominator = np.sum(centered_x * centered_x, axis=1)
+        numerator = np.sum(centered_x * centered_y, axis=1)
+
+        slopes = np.zeros(feature_count, dtype=float)
+        np.divide(
+            numerator,
+            denominator,
+            out=slopes,
+            where=eligible & (denominator > 1e-12),
+        )
+
+        first_indexes = np.argmax(valid, axis=1)
+        last_indexes = window_points - 1 - np.argmax(valid[:, ::-1], axis=1)
+        deltas = (
+            values[feature_indexes, last_indexes]
+            - values[feature_indexes, first_indexes]
+        )
+        variances = np.sum(centered_y * centered_y, axis=1) / safe_counts
+        standard_deviations = np.sqrt(variances)
+
+        slopes = np.where(eligible, slopes * feature_weights, 0.0)
+        deltas = np.where(eligible, deltas * feature_weights, 0.0)
+        standard_deviations = np.where(
+            eligible,
+            standard_deviations * feature_weights,
+            0.0,
+        )
+        base_features = np.column_stack([
+            slopes,
+            deltas,
+            np.zeros(feature_count, dtype=float),
+            standard_deviations,
+        ])
+        out.extend(base_features.ravel().tolist())
+
         if use_interactions:
-            for a, fa in enumerate(features):
-                for b in range(a + 1, len(features)):
-                    fb = features[b]
-                    pair_weight = float(feature_weights[a] * feature_weights[b])
-                    out.extend([
-                        pair_weight * slopes.get(fa, 0.0) * slopes.get(fb, 0.0),
-                        pair_weight * deltas.get(fa, 0.0) * deltas.get(fb, 0.0),
-                    ])
+            interactions = np.column_stack([
+                pair_weights * slopes[pair_a] * slopes[pair_b],
+                pair_weights * deltas[pair_a] * deltas[pair_b],
+            ])
+            out.extend(interactions.ravel().tolist())
     return np.array(out, dtype=float)
 
 
