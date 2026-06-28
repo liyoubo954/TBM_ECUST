@@ -161,6 +161,10 @@ RISK_CONFIG = {
     "tail_seal_risk": TAIL_SEAL_RISK_SPEC,
     "mud_cake_risk": MUD_CAKE_RISK_SPEC,
 }
+RISK_KEY_BY_TYPE = {
+    config["full_risk_type"]: key
+    for key, config in RISK_CONFIG.items()
+}
 
 RISK_DISPLAY_FIELDS = {
     "mud_cake_risk": list(TBM_FEATURES),
@@ -183,16 +187,6 @@ RISK_TABLES = {
     "盾尾密封失效": "tail_seal_risk",
 }
 
-
-RISK_OUTPUT_SPECS = {
-    key: {
-        "output_key": spec["output_key"],
-        "risk_type_label": spec["risk_type_label"],
-        "full_risk_type": spec["full_risk_type"],
-        "fault_cause": spec["fault_cause"],
-    }
-    for key, spec in RISK_CONFIG.items()
-}
 
 WARNING_LEVELS = {"低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ"}
 LATEST_RISK_ROW_COLUMNS = [
@@ -523,36 +517,28 @@ def _normalize_limit(value, default, maximum):
 
 
 def _find_earliest_warning_from_point_results(point_results, consecutive_n):
-    try:
-        consec = 0
-        start_time = None
-        start_params = None
-        for r in point_results or []:
-            try:
-                level = r.get("risk_level")
-                if level in ["低风险Ⅱ", "中风险Ⅲ", "高风险Ⅳ"]:
-                    if consec == 0:
-                        start_time = r.get("_time") or "-"
-                        start_params = r.get("_params") or None
-                    consec += 1
-                    if consec >= consecutive_n:
-                        return start_time, start_params
-                else:
-                    consec = 0
-                    start_time = None
-                    start_params = None
-            except Exception:
-                continue
-    except Exception:
-        pass
+    consecutive = 0
+    start_time = None
+    start_params = None
+    for result in point_results or []:
+        if result.get("risk_level") in WARNING_LEVELS:
+            if consecutive == 0:
+                start_time = result.get("_time") or "-"
+                start_params = result.get("_params")
+            consecutive += 1
+            if consecutive >= consecutive_n:
+                return start_time, start_params
+        else:
+            consecutive = 0
+            start_time = None
+            start_params = None
     return None, None
 
 
 
 class RiskAssessor:
     def __init__(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model_dir = os.path.join(current_dir, 'models')
+        self.model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
         self.mud_cake_calculator = None
         self._init_mud_cake_calculator()
 
@@ -567,13 +553,7 @@ class RiskAssessor:
 
     def _format_mud_cake_point(self, point):
         property_dict = {}
-        try:
-            feature_list = list(getattr(self.mud_cake_calculator, 'all_features', []) or [])
-            if not feature_list:
-                feature_list = list(TBM_FEATURES) + list(GEO_FEATURES) + ["Cluster_Label"]
-        except Exception:
-            feature_list = list(TBM_FEATURES) + list(GEO_FEATURES) + ["Cluster_Label"]
-
+        feature_list = self.mud_cake_calculator.all_features
         for field in feature_list:
             if field in ('RING', 'state'):
                 continue
@@ -660,16 +640,11 @@ class RiskAssessor:
         if result.get('status') != 'success':
             raise RuntimeError(result.get('message') or "结泥饼模型评估失败")
 
-        try:
-            probability = float(result.get('combined_risk', 0.0))
-        except Exception:
-            probability = 0.0
-        if probability < 0.0:
-            probability = 0.0
-        elif probability > 1.0:
-            probability = 1.0
+        probability = float(result['combined_risk'])
+        if not 0.0 <= probability <= 1.0:
+            raise RuntimeError(f"结泥饼模型返回了越界概率: {probability}")
         probability = round(probability, 2)
-        risk_level_direct = result.get('risk_level', 'no_risk')
+        risk_level_direct = result['risk_level']
         risk_level, measures, reason, potential_risk = self._get_model_level_and_measures(
             risk_level_direct,
             "结泥饼风险",
@@ -678,15 +653,12 @@ class RiskAssessor:
         return {
             "risk_type": "结泥饼风险",
             "risk_level": risk_level,
-            "risk_level_model": risk_level_direct,
             "risk_score": round(mapped_score, 2),
             "probability": probability,
             "measures": measures,
             "reason": reason,
             "potential_risk": potential_risk,
             "earliest_time": result.get('earliest_time', ''),
-            "stratum_label": result.get('stratum_label', cluster_label),
-            "training_mode": result.get('training_mode', 'stratum_specific'),
         }
 
     def _normalize_model_risk_level(self, risk_level):
@@ -717,19 +689,21 @@ class RiskAssessor:
         return _measures_and_reason(risk_level, risk_type)
 
     def map_probability_to_score(self, probability, risk_type):
-        try:
-            config = _risk_config_by_type(risk_type)
-            if config:
-                return _interpolate_score_from_probability(probability, config["score_points"])
-        except Exception:
-            pass
-        return float(probability or 0.0)
+        config = _risk_config_by_type(risk_type)
+        if config is None:
+            raise ValueError(f"不支持的风险类型: {risk_type}")
+        return _interpolate_score_from_probability(probability, config["score_points"])
 
     def _assess_generic_raw(self, data, calc_func, risk_type, fault_cause):
         result = calc_func(data)
-        probability = round(float(result.get('probability', 0) or 0), 2)
+        if not isinstance(result, dict):
+            raise ValueError(f"{risk_type}计算器未返回有效结果")
+        probability = float(result['probability'])
+        if not 0.0 <= probability <= 1.0:
+            raise ValueError(f"{risk_type}计算器返回了越界概率: {probability}")
+        probability = round(probability, 2)
         risk_level, measures, reason, potential_risk = self._get_model_level_and_measures(
-            result.get('risk_level'),
+            result['risk_level'],
             risk_type,
         )
         mapped_score = self.map_probability_to_score(probability, risk_type)
@@ -1091,7 +1065,7 @@ def query_ring_data(ring_number, measurement=None, fields=None, limit=None):
             return _dedupe_points_by_time(points)
         return None
 
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         return None
 
@@ -1292,7 +1266,6 @@ def get_risk_level():
         }
 
         def _build_risk_item(risk_obj, risk_config_key):
-            spec = RISK_OUTPUT_SPECS[risk_config_key]
             config = RISK_CONFIG[risk_config_key]
             fm = risk_obj.get("measures")
             fm = _clean_json_val(fm)
@@ -1300,28 +1273,17 @@ def get_risk_level():
             key_parameter_fields = _risk_key_parameter_fields(risk_config_key)
             imp = _risk_display_impact(risk_config_key)
 
-            try:
-                probability = float(risk_obj.get("probability") or 0.0)
-            except Exception:
-                probability = 0.0
-            if probability < 0.0:
-                probability = 0.0
-            elif probability > 1.0:
-                probability = 1.0
-            probability = round(probability, 2)
-            try:
-                risk_score = round(float(risk_obj.get("risk_score")), 2)
-            except Exception:
-                risk_score = round(risk_assessor.map_probability_to_score(probability, spec["full_risk_type"]), 2)
+            probability = round(float(risk_obj["probability"]), 2)
+            risk_score = round(float(risk_obj["risk_score"]), 2)
 
             risk_out = {
-                "risk_type": spec["risk_type_label"],
+                "risk_type": config["risk_type_label"],
                 "ring": int(result["ring"]),
                 "project_code": project_code_request,
                 "fault_measures": fm,
                 "fault_reason": risk_obj.get("reason"),
-                "fault_reason_analysis": get_fault_reason_analysis(spec["risk_type_label"], risk_obj["risk_level"]),
-                "fault_cause": spec["fault_cause"],
+                "fault_reason_analysis": get_fault_reason_analysis(config["risk_type_label"], risk_obj["risk_level"]),
+                "fault_cause": config["fault_cause"],
                 "impact_parameters": imp,
                 "safety_level": risk_obj["risk_level"],
                 "risk_level": map_safety_to_level(risk_obj["risk_level"]),
@@ -1337,7 +1299,7 @@ def get_risk_level():
                 earliest_time_raw = risk_obj.get("earliest_time") or "-"
             else:
                 earliest_time_raw, earliest_params = _find_earliest_warning_from_point_results(
-                    point_results_by_type.get(spec["full_risk_type"]),
+                    point_results_by_type.get(config["full_risk_type"]),
                     CONSECUTIVE_TRIGGER_N,
                 )
 
@@ -1376,19 +1338,9 @@ def get_risk_level():
             return risk_out
 
         for risk in risk_results:
-            risk_type = risk['risk_type']
-
-            if risk_type == "结泥饼风险":
-                result["mud_cake_risk"] = _build_risk_item(risk, "mud_cake_risk")
-
-            elif risk_type == "滞排风险":
-                result["clog_risk"] = _build_risk_item(risk, "clog_risk")
-
-            elif risk_type == "主驱动密封失效风险":
-                result["mdr_seal_risk"] = _build_risk_item(risk, "mdr_seal_risk")
-
-            elif risk_type == "盾尾密封失效风险":
-                result["tail_seal_risk"] = _build_risk_item(risk, "tail_seal_risk")
+            risk_config_key = RISK_KEY_BY_TYPE.get(risk["risk_type"])
+            if risk_config_key:
+                result[risk_config_key] = _build_risk_item(risk, risk_config_key)
 
         if cache_ttl > 0:
             _ttl_cache_set("risk_level_result", cache_key, result, ttl_sec=cache_ttl, max_items=2048)
@@ -2202,7 +2154,7 @@ def query_history_data():
                 res = client.query(q, database=TARGET_DB_NAME, epoch='ms')
                 pts = list(res.get_points())
                 return pts
-            except Exception as e:
+            except Exception:
                 return []
 
         max_workers = _env_int("HISTORY_QUERY_MAX_WORKERS", 8)

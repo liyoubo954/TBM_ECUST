@@ -23,11 +23,13 @@ from app.risk.utils.mud_cake_risk import (
     SORT_CANDIDATE_COLUMNS,
     TBM_FEATURES,
     build_multi_ring_sequences,
+    calibrated_combined_risk,
     feature_masked_matrix,
     flat_feature_weights,
     normalize_with_feature_mask,
     sort_ring_dataframe,
     smooth_values,
+    stratum_key,
     trend_vector,
 )
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -169,16 +171,6 @@ def _split_source_rings(rings: List[int]) -> Tuple[List[int], List[int], List[in
     return rings[:train_end], rings[train_end:val_end], rings[val_end:]
 
 
-def stratum_key(value: Any) -> str:
-    try:
-        f = float(value)
-        if f.is_integer():
-            return str(int(f))
-        return str(f).replace(".", "_")
-    except Exception:
-        return str(value).strip()
-
-
 def available_strata(data: pd.DataFrame) -> List[str]:
     if "Cluster_Label" not in data.columns:
         raise ValueError("缺少地层类别字段 Cluster_Label，无法按地层训练结泥饼模型")
@@ -211,7 +203,7 @@ def filter_by_stratum(data: pd.DataFrame, stratum_label: Any) -> pd.DataFrame:
     return selected
 
 
-def _usable_feature_columns(data: pd.DataFrame, stratum_specific: bool) -> List[str]:
+def _usable_feature_columns(data: pd.DataFrame) -> List[str]:
     required_features = TBM_FEATURES + GEO_FEATURES
     missing = [feature for feature in required_features if feature not in data.columns]
     if missing:
@@ -292,7 +284,6 @@ class MudCakeTrainer:
             },
             "autoencoder_params": {
                 "hidden_size": 48,
-                "num_layers": 1,
                 "dropout": 0.1,
                 "learning_rate": 0.0005,
                 "batch_size": 64,
@@ -311,7 +302,6 @@ class MudCakeTrainer:
                 "n_jobs": -1,
             },
             "aggregation": {
-                "per_ring_mode": "median",
                 "final_ring_mode": "median",
                 "quantile_p": 0.75,
                 "topk_k": 3,
@@ -363,7 +353,7 @@ class MudCakeTrainer:
         data = load_fused_training_data(data_dirs)
         if self.stratum_label is not None:
             data = filter_by_stratum(data, self.stratum_label)
-        self.all_features = _usable_feature_columns(data, stratum_specific=self.stratum_label is not None)
+        self.all_features = _usable_feature_columns(data)
         self.feature_coverage = _feature_coverage(data, self.all_features)
         self._log_feature_coverage()
         self.feature_dim = len(self.all_features) * int(self.config["data_processing"]["window_points"])
@@ -373,7 +363,7 @@ class MudCakeTrainer:
     def prepare_training_data(self, data: pd.DataFrame) -> pd.DataFrame:
         if self.stratum_label is not None:
             data = filter_by_stratum(data, self.stratum_label)
-        self.all_features = _usable_feature_columns(data, stratum_specific=self.stratum_label is not None)
+        self.all_features = _usable_feature_columns(data)
         self.feature_coverage = _feature_coverage(data, self.all_features)
         self._log_feature_coverage()
         self.feature_dim = len(self.all_features) * int(self.config["data_processing"]["window_points"])
@@ -569,7 +559,6 @@ class MudCakeTrainer:
         self.autoencoder = AutoEncoder(
             input_size=self.feature_dim,
             hidden_size=int(params["hidden_size"]),
-            num_layers=int(params["num_layers"]),
             dropout=float(params["dropout"]),
             l2=float(params.get("l2", 0.0)),
             track_loss=True,
@@ -773,28 +762,11 @@ class MudCakeTrainer:
         )
         return ae_error, if_anomaly, combined
 
-    @staticmethod
-    def _scale_metric(values: np.ndarray, low: float, high: float) -> np.ndarray:
-        denom = high - low
-        if denom <= 1e-12:
-            return np.zeros_like(values, dtype=float)
-        return np.clip((values - low) / denom, 0.0, 1.0)
-
     def _calibrated_combined_score(self, ae_error: np.ndarray, if_anomaly: np.ndarray) -> np.ndarray:
         calibration = self.config.get("risk_calibration", {})
         if calibration.get("enabled") is not True or calibration.get("method") != "kde":
             raise ValueError("Risk calibration must be enabled and use KDE")
-        ae_bounds = calibration.get("ae_error_bounds", {})
-        if_bounds = calibration.get("if_anomaly_bounds", {})
-        norm_ae = self._scale_metric(ae_error, float(ae_bounds["low"]), float(ae_bounds["high"]))
-        norm_if = self._scale_metric(if_anomaly, float(if_bounds["low"]), float(if_bounds["high"]))
-        fusion = self.config.get("risk_fusion", {})
-        ae_weight = float(fusion.get("ae_weight", 0.5))
-        if_weight = float(fusion.get("if_weight", 0.5))
-        total = ae_weight + if_weight
-        if total <= 0:
-            ae_weight, if_weight, total = 0.5, 0.5, 1.0
-        return (ae_weight / total) * norm_ae + (if_weight / total) * norm_if
+        return calibrated_combined_risk(ae_error, if_anomaly, self.config)
 
     @staticmethod
     def _silverman_bandwidth(values: np.ndarray) -> float:
@@ -1340,7 +1312,7 @@ def summarize_stratum_training_data(data_dirs: Iterable[Path]) -> Dict[str, Any]
     summary: Dict[str, Any] = {}
     for label in strata:
         subset = filter_by_stratum(data, label)
-        features = _usable_feature_columns(subset, stratum_specific=True)
+        features = _usable_feature_columns(subset)
         rings = sorted({_ring_key(ring) for ring in subset["Ring.No"].dropna().unique()})
         per_ring = subset.groupby("Ring.No").size()
         summary[label] = {

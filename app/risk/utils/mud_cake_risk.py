@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import joblib
-from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 
 DEFAULT_RANDOM_SEED = 42
@@ -54,35 +53,6 @@ SORT_CANDIDATE_COLUMNS = [
 ]
 
 
-def _safe_float(value: Any) -> float:
-    try:
-        if value is None or pd.isna(value):
-            return np.nan
-        return float(value)
-    except Exception:
-        return np.nan
-
-
-def _safe_ratio_value(numerator: float, denominator: float) -> float:
-    if np.isnan(numerator) or np.isnan(denominator) or abs(denominator) <= 1e-6:
-        return np.nan
-    return numerator / abs(denominator)
-
-
-def add_engineered_features_to_row(values: Dict[str, Any]) -> Dict[str, Any]:
-    speed = abs(_safe_float(values.get("Thrust.Spd")))
-    force = abs(_safe_float(values.get("Thrust.Force")))
-    torque = abs(_safe_float(values.get("CH.Torque")))
-    contact_force = abs(_safe_float(values.get("CH.Tot.ContactForce")))
-    values["Torque.Abs"] = torque
-    values["Force.Per.Speed"] = _safe_ratio_value(force, speed)
-    values["Torque.Per.Speed"] = _safe_ratio_value(torque, speed)
-    values["ContactForce.Per.Speed"] = _safe_ratio_value(contact_force, speed)
-    values["Torque.Per.Force"] = _safe_ratio_value(torque, force)
-    values["ContactForce.Per.Force"] = _safe_ratio_value(contact_force, force)
-    return values
-
-
 def stratum_key(value: Any) -> str:
     try:
         f = float(value)
@@ -98,7 +68,6 @@ class AutoEncoder(tf.keras.Model):
         self,
         input_size: int,
         hidden_size: int,
-        num_layers: int = 1,
         dropout: float = 0.2,
         l2: float = 0.0,
         track_loss: bool = False,
@@ -376,13 +345,6 @@ def normalize_with_feature_mask(
     return normalized
 
 
-def minmax(a: np.ndarray) -> np.ndarray:
-    mn, mx = float(np.min(a)), float(np.max(a))
-    if mx - mn < 1e-8:
-        return np.zeros_like(a)
-    return (a - mn) / (mx - mn)
-
-
 def scale_by_bounds(values: np.ndarray, bounds: Dict[str, Any]) -> np.ndarray:
     low = float(bounds.get("low", 0.0)) if isinstance(bounds, dict) else 0.0
     high = float(bounds.get("high", 1.0)) if isinstance(bounds, dict) else 1.0
@@ -398,18 +360,21 @@ def calibrated_combined_risk(
     config: Dict[str, Any],
 ) -> np.ndarray:
     calibration = config.get("risk_calibration", {}) if isinstance(config, dict) else {}
-    if calibration.get("enabled") and calibration.get("ae_error_bounds") and calibration.get("if_anomaly_bounds"):
-        norm_err = scale_by_bounds(ae_error, calibration.get("ae_error_bounds", {}))
-        norm_if = scale_by_bounds(if_anomaly, calibration.get("if_anomaly_bounds", {}))
-    else:
-        norm_err = minmax(ae_error)
-        norm_if = minmax(if_anomaly)
-    rf = config.get("risk_fusion", {}) if isinstance(config, dict) else {}
-    ae_w = float(rf.get("ae_weight", 0.5))
-    if_w = float(rf.get("if_weight", 0.5))
+    if calibration.get("enabled") is not True:
+        raise ValueError("结泥饼模型缺少风险标定配置")
+    ae_bounds = calibration.get("ae_error_bounds")
+    if_bounds = calibration.get("if_anomaly_bounds")
+    if not isinstance(ae_bounds, dict) or not isinstance(if_bounds, dict):
+        raise ValueError("结泥饼模型缺少训练阶段保存的分数边界")
+    norm_err = scale_by_bounds(ae_error, ae_bounds)
+    norm_if = scale_by_bounds(if_anomaly, if_bounds)
+
+    fusion = config.get("risk_fusion", {}) if isinstance(config, dict) else {}
+    ae_w = float(fusion.get("ae_weight", 0.5))
+    if_w = float(fusion.get("if_weight", 0.5))
     total = ae_w + if_w
-    if total <= 0:
-        ae_w, if_w, total = 0.5, 0.5, 1.0
+    if not np.isfinite(total) or ae_w < 0 or if_w < 0 or total <= 0:
+        raise ValueError("结泥饼风险融合权重无效")
     return (ae_w / total) * norm_err + (if_w / total) * norm_if
 
 
@@ -523,7 +488,6 @@ RISK_SPEC = {
     "name": "结泥饼风险",
     "risk_type_label": "结泥饼",
     "full_risk_type": "结泥饼风险",
-    "output_key": "mud_cake_risk",
     "fault_cause": "渣土在刀盘面板或土仓内板结硬化，形成阻碍掘进的泥饼，导致掘进效率降低",
     "potential_risk": "结泥饼预警",
     "output_fields": TBM_FEATURES,
@@ -545,7 +509,6 @@ RISK_SPEC = {
         "地层类别": "",
     },
     "score_points": [(0.0, 4.0), (0.3, 3.5), (0.65, 2.0), (0.9, 0.5), (1.0, 0.0)],
-    "probability_thresholds": (0.65, 0.3),
     "fault_reason_analysis": {
         "无风险Ⅰ": "刀盘扭矩与刀盘转速匹配良好，推力与推进速度稳定，贯入度无异常波动。渣土含水率与改良剂比例处于工艺目标，仓壁与面板未见黏附或板结痕迹，排泥连续顺畅，不具备泥饼形成的物理条件。",
         "低风险Ⅱ": "观察到刀盘扭矩轻微抬升、推进速度小幅下降，推力与贯入度边界化波动，反映土体塑性增大与局部摩阻上升。面板可能出现初始黏附点，渣粒分布偏粗或含水率偏离最佳区间，短时排泥不均。若该状态持续，将促使黏附向板结演化，需要关注改良剂与水分的微调空间。",
@@ -574,109 +537,22 @@ RISK_SPEC = {
 
 
 class UnsupervisedMudCakeDetector:
-
-    def __init__(self, verbose: bool = True):
-        self.verbose = verbose
-        self.device = self._select_device()
+    def __init__(self, model_dir: str = None):
         self.autoencoder = None
         self.isolation_forest = None
-        self.scalers = {}
         self.robust_scalers = {}
         self.model_info = {}
-        self.training_data_df = None
-        self.model_dir = RISK_MODEL_DIR
-        self.model_dir.mkdir(parents=True, exist_ok=True)
-
-        self.config = {
-            'sequence_length': 6,
-            'feature_selection': {
-                'min_valid_ratio': 0.05,
-                'min_variance': 1e-6,
-            },
-            'feature_weights': {
-                'Thrust.Spd': 1.5,
-                'CH.Tot.ContactForce': 1.5,
-                'Thrust.Force': 1.5,
-                'CH.Spd': 0.7,
-                'CH.Torque': 0.7,
-            },
-            'risk_fusion': {
-                'ae_weight': 0.35,
-                'if_weight': 0.65,
-            },
-            'data_processing': {
-                'sampling_ratio': 0.8,
-                'random_seed': 42,
-                'val_ratio': 0.2,
-                'rings_per_sequence': 6,
-                'window_points': 48,
-                'window_stride': 8,
-                'clip_zscore': 3.5,
-            },
-            'autoencoder_params': {
-                'hidden_size': 16,
-                'num_layers': 1,
-                'dropout': 0.2,
-                'learning_rate': 0.0005,
-                'batch_size': 32,
-                'epochs': 30,
-                'patience': 8,
-                'l2': 1e-5,
-            },
-            'isolation_forest_params': {
-                'contamination': 0.04,
-                'random_state': 42,
-                'n_estimators': 100,
-                'max_fit_samples': 50000,
-                'use_interactions': False
-            },
-        }
-
-    def _select_device(self):
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            try:
-                for gpu in gpus:
-                    tf.config.experimental.set_memory_growth(gpu, True)
-                return 'GPU'
-            except Exception as e:
-                return 'CPU'
-        else:
-            return 'CPU'
-
+        self.config: Dict[str, Any] = {}
+        self.all_features: List[str] = []
+        self.feature_dim = 0
+        self.model_dir = Path(model_dir) if model_dir is not None else RISK_MODEL_DIR
 
     def _normalize_with_feature_mask(self, data: np.ndarray, feature_mask: np.ndarray, data_source: str) -> np.ndarray:
-        d = data.shape[1]
         zmax = float(self.config.get('data_processing', {}).get('clip_zscore', 0) or 0)
-        # 优先使用鲁棒尺度（形如 self.robust_scalers['global_window'][i] = {'median': m, 'mad': s}）
-        if data_source in self.robust_scalers and isinstance(self.robust_scalers[data_source], list) and len(self.robust_scalers[data_source]) == d:
-            return normalize_with_feature_mask(data, feature_mask, self.robust_scalers[data_source], zmax)
-        # 回退到标准化器路径（兼容旧模型）
-        if data_source not in self.scalers or not isinstance(self.scalers[data_source], list) or len(self.scalers[data_source]) != d:
-            self.scalers[data_source] = [StandardScaler() for _ in range(d)]
-            for i in range(d):
-                col_mask = feature_mask[:, i]
-                values = data[col_mask, i]
-                if values.size > 0:
-                    self.scalers[data_source][i].fit(values.reshape(-1, 1))
-                else:
-                    self.scalers[data_source][i].fit(np.zeros((10, 1)))
-        normalized = data.copy()
-        for i in range(d):
-            col_mask = feature_mask[:, i]
-            if np.any(col_mask):
-                col = data[:, i:i + 1]
-                transformed = self.scalers[data_source][i].transform(col)[:, 0]
-                if zmax > 0:
-                    transformed = np.clip(transformed, -zmax, zmax)
-                normalized[col_mask, i] = transformed[col_mask]
-                normalized[~col_mask, i] = 0.0
-        return normalized
-    # 废弃：训练与推理不再使用基线/中心化，相关方法移除
-
-    
-
-    
+        scalers = self.robust_scalers.get(data_source)
+        if not isinstance(scalers, list) or len(scalers) != data.shape[1]:
+            raise ValueError(f"结泥饼模型缺少匹配的 {data_source} 鲁棒尺度参数")
+        return normalize_with_feature_mask(data, feature_mask, scalers, zmax)
 
     def load_models(self) -> bool:
         try:
@@ -704,7 +580,6 @@ class UnsupervisedMudCakeDetector:
             self.autoencoder = AutoEncoder(
                 input_size=self.feature_dim,
                 hidden_size=ae_params['hidden_size'],
-                num_layers=ae_params['num_layers'],
                 dropout=ae_params['dropout'],
                 l2=float(ae_params.get('l2', 0.0)),
             )
@@ -715,8 +590,13 @@ class UnsupervisedMudCakeDetector:
             scalers_pack = joblib.load(scalers_path)
             if not isinstance(scalers_pack, dict):
                 raise ValueError("mud_cake_scalers.pkl 格式错误，必须为 dict")
-            self.robust_scalers = scalers_pack.get('robust', {})
-            self.scalers = scalers_pack.get('standard', {})
+            robust_scalers = scalers_pack.get('robust')
+            if not isinstance(robust_scalers, dict):
+                raise ValueError("mud_cake_scalers.pkl 缺少 robust 尺度参数")
+            global_scalers = robust_scalers.get('global_window')
+            if not isinstance(global_scalers, list) or len(global_scalers) != self.feature_dim:
+                raise ValueError("global_window 鲁棒尺度参数与模型输入维度不匹配")
+            self.robust_scalers = robust_scalers
             return True
         except Exception as e:
             print(f"加载模型失败: {e}")
@@ -726,45 +606,35 @@ class UnsupervisedMudCakeDetector:
 class MudCakeRiskCalculator:
 
     def __init__(self, model_dir: str = None):
-        self.detector = UnsupervisedMudCakeDetector()
-        if model_dir is not None:
-            self.detector.model_dir = Path(model_dir)
-        # 尝试加载模型；加载失败时仍允许实例化，调用方自行处理
-        try:
-            self.detector.load_models()
-        except Exception:
-            pass
+        self.detector = UnsupervisedMudCakeDetector(model_dir=model_dir)
+        self.detector.load_models()
         self.model_info = getattr(self.detector, "model_info", {})
         self.stratum_label = self.model_info.get("stratum_label")
 
-    def _aggregate_values(self, values: List[float], mode: str, **kwargs) -> float:
-        try:
-            if not values:
-                return 0.0
-            arr = np.array(values, dtype=float)
-            if mode == 'max':
-                return float(np.max(arr))
-            if mode == 'mean':
-                return float(np.mean(arr))
-            if mode == 'median':
-                return float(np.median(arr))
-            if mode == 'pquantile':
-                q = float(kwargs.get('quantile_p', 0.95))
-                q = max(0.0, min(1.0, q))
-                return float(np.quantile(arr, q))
-            if mode == 'topk_mean':
-                k = int(kwargs.get('topk_k', 3) or 3)
-                k = max(1, min(k, arr.size))
-                topk = np.sort(arr)[-k:]
-                return float(np.mean(topk))
-            # 默认采用稳健的中位数，避免少数窗口尖峰导致误判
-            return float(np.median(arr))
-        except Exception:
-            # 任何异常回退为均值
-            try:
-                return float(np.mean(np.array(values, dtype=float)))
-            except Exception:
-                return 0.0
+    @staticmethod
+    def _aggregate_values(values: List[float], mode: str, **kwargs) -> float:
+        if not values:
+            raise ValueError("结泥饼风险聚合缺少窗口分数")
+        array = np.asarray(values, dtype=float)
+        if not np.all(np.isfinite(array)):
+            raise ValueError("结泥饼窗口分数包含非有限值")
+        if mode == 'max':
+            return float(np.max(array))
+        if mode == 'mean':
+            return float(np.mean(array))
+        if mode == 'median':
+            return float(np.median(array))
+        if mode == 'pquantile':
+            quantile = float(kwargs.get('quantile_p', 0.95))
+            if not 0.0 <= quantile <= 1.0:
+                raise ValueError("结泥饼风险分位数必须位于 [0,1]")
+            return float(np.quantile(array, quantile))
+        if mode == 'topk_mean':
+            k = int(kwargs.get('topk_k', 3))
+            if k <= 0:
+                raise ValueError("结泥饼风险 topk_k 必须为正整数")
+            return float(np.mean(np.sort(array)[-min(k, array.size):]))
+        raise ValueError(f"不支持的结泥饼风险聚合方式: {mode}")
 
     def calculate_ring_risk_sequence(self, sequence_points: List[Dict[str, Any]]) -> Dict[str, Any]:
         try:
@@ -792,7 +662,6 @@ class MudCakeRiskCalculator:
                     raw_feature_values.update({k: v for k, v in p.items() if k not in {'property'}})
                 if isinstance(prop, dict):
                     raw_feature_values.update(prop)
-                add_engineered_features_to_row(raw_feature_values)
                 for f in all_feats:
                     v = raw_feature_values.get(f)
                     try:
@@ -840,40 +709,9 @@ class MudCakeRiskCalculator:
                 for s, m in zip(sequences, masks)
             ]
             scores = self.detector.isolation_forest.decision_function(trend_vectors)
-            calibrated_risk = calibrated_combined_risk(err, -scores, self.detector.config)
+            combined = calibrated_combined_risk(err, -scores, self.detector.config)
             thresholds = risk_thresholds(self.detector.config)
-            norm_err = minmax(err)
-            norm_if = minmax(-scores)
-            rf = self.detector.config.get('risk_fusion', {})
-            ae_w = float(rf.get('ae_weight', 0.5))
-            if_w = float(rf.get('if_weight', 0.5))
-            ssum = ae_w + if_w
-            if ssum <= 0:
-                ae_w, if_w = 0.5, 0.5
-                ssum = 1.0
-            ae_w /= ssum
-            if_w /= ssum
-            combined = calibrated_risk
-            # 趋势门控逻辑已删除：直接使用融合分作为风险值
 
-            # 段落和最早触发均使用当前地层模型训练保存的 KDE 阈值。
-            segments = []
-            in_seg = False
-            seg_start = 0
-            earliest_index = None
-            for i, v in enumerate(combined):
-                if earliest_index is None and v >= thresholds["low"]:
-                    earliest_index = i
-                if v >= thresholds["high"] and not in_seg:
-                    in_seg = True
-                    seg_start = i
-                elif v < thresholds["high"] and in_seg:
-                    in_seg = False
-                    segments.append({'start_index': seg_start, 'end_index': i - 1})
-            if in_seg:
-                segments.append({'start_index': seg_start, 'end_index': len(combined) - 1})
-
-            # 每环综合风险（取该环所有窗口风险的稳健聚合）
             def _rk(x):
                 try:
                     return int(x)
@@ -883,27 +721,10 @@ class MudCakeRiskCalculator:
                     except Exception:
                         return x
             ring_set = sorted(set(window_to_ring), key=_rk)
-            per_ring = []
-            agg_cfg = self.detector.config.get('aggregation', {}) if hasattr(self.detector, 'config') else {}
-            per_ring_mode = str(agg_cfg.get('per_ring_mode', 'median'))
-            final_ring_mode = str(agg_cfg.get('final_ring_mode', per_ring_mode))
+            agg_cfg = self.detector.config.get('aggregation', {})
+            final_ring_mode = str(agg_cfg.get('final_ring_mode', 'median'))
             topk_k = int(agg_cfg.get('topk_k', 3) or 3)
             quantile_p = float(agg_cfg.get('quantile_p', 0.95) or 0.95)
-            for r in ring_set:
-                idxs = [i for i, rr in enumerate(window_to_ring) if rr == r]
-                if not idxs:
-                    continue
-                vals = [float(combined[i]) for i in idxs]
-                ring_risk = self._aggregate_values(vals, per_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
-                level = risk_level_from_score(ring_risk, self.detector.config)
-                try:
-                    ring_int = int(r)
-                except Exception:
-                    try:
-                        ring_int = int(float(r))
-                    except Exception:
-                        ring_int = r
-                per_ring.append({'ring': ring_int, 'combined_risk': ring_risk, 'risk_level': level})
 
             # 最后一环结果：取“最后一环所有窗口”的稳健聚合（默认中位数），体现序列整体对末环的影响
             last_ring = ring_set[-1] if ring_set else None
@@ -918,7 +739,6 @@ class MudCakeRiskCalculator:
                 final_risk = self._aggregate_values(final_vals, final_ring_mode, topk_k=topk_k, quantile_p=quantile_p)
                 final_level = risk_level_from_score(final_risk, self.detector.config)
             earliest_time = '-'
-            earliest_ring = (int(last_ring) if last_ring is not None else None)
             if last_ring is not None:
                 # 仅考虑最后一环的窗口；若转换异常则抛错，由上层捕获为评估失败
                 for i, (ring_i, val_i) in enumerate(zip(window_to_ring, combined)):
@@ -931,10 +751,7 @@ class MudCakeRiskCalculator:
                 'status': 'success',
                 'combined_risk': final_risk,
                 'risk_level': final_level,
-                'segments': segments,
                 'earliest_time': earliest_time,
-                'earliest_ring': (int(last_ring) if last_ring is not None else None),
-                'per_ring': per_ring,
             }
         except Exception as e:
             return {'status': 'error', 'message': f'序列评估失败: {str(e)}'}

@@ -1,5 +1,6 @@
-import numpy as np
 from typing import Dict, List, Any
+
+from app.risk.utils.sensor_validation import require_nonnegative_sensor_values
 
 UNIFIED_REQUIRED_PARAMS = {
     "Tail.Seal.Rear.Prs.02": "2#盾尾密封后压力",
@@ -45,7 +46,6 @@ RISK_SPEC = {
     "name": "盾尾密封失效风险",
     "risk_type_label": "盾尾密封失效",
     "full_risk_type": "盾尾密封失效风险",
-    "output_key": "tail_seal_risk",
     "fault_cause": "盾尾密封刷密封件磨损、撕裂或者压损后，失去阻挡同步注浆浆液和地下水的能力",
     "potential_risk": "盾尾密封失效预警",
     "fields": list(UNIFIED_REQUIRED_PARAMS.keys()),
@@ -69,7 +69,6 @@ RISK_SPEC = {
         "8#A液泵出口压力": "bar",
     },
     "score_points": [(0.0, 4.0), (0.3, 3.5), (0.5, 2.0), (0.9, 0.5), (1.0, 0.0)],
-    "probability_thresholds": (0.5, 0.3),
     "fault_reason_analysis": {
         "无风险Ⅰ": "盾尾密封压力与注浆压力处于工况目标区间，密封刷弹性良好、刷列贴合充分，无渗水或浆液串漏现象，与管片拼装配合稳定。",
         "低风险Ⅱ": "密封压力与注脂量轻微上调以维持密封效果，提示局部刷列出现初期磨耗或贴合度下降，个别位置可能存在微渗。若维持该趋势将加速磨耗与膜层破坏，需关注注脂分配均衡与刷列状态。",
@@ -97,100 +96,40 @@ RISK_SPEC = {
 }
 
 
-def _to_sensor_value(value: Any) -> float:
-    return float(value) if _is_valid_sensor_value(value) else np.nan
-
-
-def _is_valid_sensor_value(value: Any) -> bool:
-    if value is None or isinstance(value, bool):
-        return False
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        return False
-    return not (np.isnan(value) or np.isinf(value))
-
-
-def _is_valid_pressure(value: Any) -> bool:
-    return _is_valid_sensor_value(value) and float(value) >= 0.0
-
-
-def _get_sensor_raw_value(data: Dict[str, Any], sensor_key: str) -> Any:
-    if sensor_key in data and data[sensor_key] is not None:
-        return data[sensor_key]
-    return None
-
-
 def map_project_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
-    mapped_data = {
-        'seal_pressures': [],
-        'grout_pressures': []
+    values = require_nonnegative_sensor_values(data, UNIFIED_REQUIRED_PARAMS, "盾尾密封风险")
+    return {
+        'seal_pressures': [values[sensor] for sensor in UNIFIED_SEAL_SENSORS],
+        'grout_pressures': [values[sensor] for sensor in UNIFIED_GROUT_SENSORS],
     }
-
-    # 严格校验：固定输入字段必须全部有效，禁止使用部分传感器数据兜底计算。
-    missing_seal = [s for s in UNIFIED_SEAL_SENSORS if not _is_valid_pressure(_get_sensor_raw_value(data, s))]
-    missing_grout = [s for s in UNIFIED_GROUT_SENSORS if not _is_valid_pressure(_get_sensor_raw_value(data, s))]
-
-    missing = missing_seal + missing_grout
-    if missing:
-        raise ValueError(f"盾尾密封风险计算缺少必要字段: {', '.join(missing)}")
-
-    for sensor in UNIFIED_SEAL_SENSORS:
-        mapped_data['seal_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
-
-    for sensor in UNIFIED_GROUT_SENSORS:
-        mapped_data['grout_pressures'].append(_to_sensor_value(_get_sensor_raw_value(data, sensor)))
-
-    return mapped_data
 
 
 def calculate_universal_tail_seal_risk(data: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        mapped_data = map_project_data(data)
-        seal_pressures = mapped_data['seal_pressures']
-        grout_pressures = mapped_data['grout_pressures']
+    mapped_data = map_project_data(data)
+    risk_prob = 0.0
+    for seal_pressure, grout_pressure in zip(
+        mapped_data['seal_pressures'],
+        mapped_data['grout_pressures'],
+    ):
+        if grout_pressure > seal_pressure:
+            risk_prob += 1 / 16
+        if seal_pressure >= 50:
+            risk_prob += 1 / 16
+        elif seal_pressure >= 40:
+            risk_prob += (seal_pressure - 40) / 160
 
-        risk_prob = 0.0
-        valid_points = 0
-        sensor_count = min(len(seal_pressures), len(grout_pressures))
+    probability = min(risk_prob, 1.0)
+    if probability >= 0.9:
+        level = '高风险'
+    elif probability >= 0.5:
+        level = '中风险'
+    elif probability >= 0.3:
+        level = '低风险'
+    else:
+        level = '无风险'
 
-        for i in range(sensor_count):
-            P_seal, P_grout = seal_pressures[i], grout_pressures[i]
-
-            if not (np.isnan(P_seal) or np.isnan(P_grout)):
-                valid_points += 1
-                point_risk = 0.0
-
-                # 逻辑1：压差风险
-                if P_grout > P_seal:
-                    point_risk += 1 / 16
-
-                # 逻辑2：绝对压力风险
-                if P_seal >= 50:
-                    point_risk += 1 / 16
-                elif 40 <= P_seal < 50:
-                    point_risk += (P_seal - 40) / 160
-
-                risk_prob += point_risk
-
-        if valid_points == 0:
-            raise ValueError("有效盾尾密封传感器数据缺失")
-
-        probability = min(risk_prob, 1.0)
-
-        if probability >= 0.9:
-            level = '高风险'
-        elif probability >= 0.5:
-            level = '中风险'
-        elif probability >= 0.3:
-            level = '低风险'
-        else:
-            level = '无风险'
-
-        return {
-            'probability': round(probability, 3),
-            'risk_level': level,
-            'details': f"有效点: {valid_points}/{sensor_count}, 累计概率: {probability:.3f}"
-        }
-    except Exception as e:
-        raise RuntimeError(f"盾尾密封风险评估失败: {str(e)}")
+    return {
+        'probability': round(probability, 3),
+        'risk_level': level,
+        'details': f"有效点: 8/8, 累计概率: {probability:.3f}"
+    }
